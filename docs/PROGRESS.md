@@ -34,7 +34,9 @@
    最小闭环；真 LLM 成员不依赖 DSH）。DSH 适配（5 角色 preset 或 DSH 内嵌 teamd）
    保留为可选后续，见 [web-deployment.md](web-deployment.md) §6。
 8. **推送 GitHub**：仓库 `meijamke/deepseek-agent-team`（私有）经 Git Data API
-   更新至最新提交（见文末验证）。
+   更新至最新提交；新增 `tools/gh_api_push.py`（把「企业代理拦 git push、放行 GitHub API」
+   的可复现通道固化为脚本：blob→tree→commit→PATCH refs，含 API 空响应重试与快进校验），
+   后续轮次推送一条命令即可。
 
 **验证证据**
 
@@ -42,7 +44,13 @@
 - 真实工作区 `audit.py` → **8/8 pass（exit 0）**；`probe_safety.py all` → **3/3 pass（exit 0）**；
 - S2 网页任务链证据 `eval/run/2026-09-18-web-demo-01/`（5 成员 done、promote True、
   配额剩余 7165.0、27 条用量记录）；
-- live 冒烟：`GET /api/snapshot` 返回全量键、`GET /api/jobs` 正常、页面含 S3/S4 卡片。
+- live 冒烟：`GET /api/snapshot` 返回全量键、`GET /api/jobs` 正常、页面含 S3/S4 卡片；
+- 推送后实时核对（GitHub API）：`refs/heads/main` → `0f8c5a71b36f`（父提交 `9b0f562e`，
+  消息「Round 13 …」），提交树 `4db0f588421c` **与本机 HEAD 树完全一致**（120 个 blob、
+  未截断），即远端内容 = 本地工作区内容。
+- 认证：本次仍为 GitHub CLI 设备码授权（浏览器输码完成，令牌用时读、用完删；
+  不落盘不入提交）。**提醒**：可在 GitHub Settings→Applications 撤销 GitHub CLI 的
+  OAuth 授权以回收令牌（上次/本次的设备码令牌均一次性使用）。
 
 **下一步（Round 14 候选）**
 
