@@ -1,0 +1,21 @@
+{
+  "task": "t-ping",
+  "steps": {
+    "dev": 10,
+    "qa": 8
+  },
+  "budget_units": "steps",
+  "budget_given": {
+    "spec->dev": 6
+  },
+  "budget_remaining": {
+    "dev->qa": 4
+  },
+  "note": "step 数为成员执行步骤报告值；DSH 未暴露 token 计量，token 列为 unknown",
+  "total_steps_estimate": 18,
+  "tokens": {
+    "metering": "unavailable",
+    "estimate": null
+  },
+  "concurrency_cap": "1 子代理/轮（DSH 会话限制）；线程级并发已实测（r10）"
+}

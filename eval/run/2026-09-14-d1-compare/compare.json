@@ -1,0 +1,100 @@
+{
+  "baseline": {
+    "crash": false,
+    "spec": "done",
+    "dev": "done",
+    "qa": "done",
+    "audit_after_recovery": {
+      "exit0": true,
+      "fails": []
+    },
+    "label": "baseline",
+    "dev_crashed": false,
+    "statuses": {
+      "spec": "done",
+      "dev": "done",
+      "qa": "done"
+    },
+    "message_types": [
+      "review_request",
+      "review_result",
+      "task_assigned"
+    ],
+    "review_request_count": 1,
+    "review_result": [
+      {
+        "verdict": "pass",
+        "trigger": "review_request",
+        "method": "exec:py_compile+test_stats.py"
+      }
+    ],
+    "handoff_count": 2,
+    "task_visited": [
+      "dev",
+      "qa"
+    ],
+    "usage": {
+      "records": 19,
+      "total_est_tokens": 2645,
+      "sources": [
+        "estimate"
+      ]
+    },
+    "deliverable_ok": true,
+    "audit": {
+      "exit0": true,
+      "fails": []
+    }
+  },
+  "member-crash": {
+    "crash": true,
+    "spec": "done",
+    "dev": "crashed(status=running, stale)",
+    "audit_before_recovery": {
+      "exit0": false,
+      "fails": [
+        "stale_running"
+      ]
+    },
+    "qa": "done",
+    "audit_after_recovery": {
+      "exit0": true,
+      "fails": []
+    },
+    "label": "member-crash",
+    "dev_crashed": true,
+    "statuses": {
+      "spec": "done",
+      "dev": "failed",
+      "qa": "done"
+    },
+    "message_types": [
+      "review_result",
+      "task_assigned"
+    ],
+    "review_request_count": 0,
+    "review_result": [
+      {
+        "verdict": "pass",
+        "trigger": "self-initiated: dev stale, artifact present",
+        "method": "exec:py_compile+test_stats.py"
+      }
+    ],
+    "handoff_count": 1,
+    "task_visited": [
+      "dev"
+    ],
+    "usage": {
+      "records": 12,
+      "total_est_tokens": 1394,
+      "sources": [
+        "estimate"
+      ]
+    },
+    "deliverable_ok": true,
+    "audit": {
+      "exit0": true,
+      "fails": []
+    }
+  }
+}

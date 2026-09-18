@@ -1,0 +1,1 @@
+{"ts": "2026-09-14T10:50:51.179090+00:00", "agent_id": "spec", "kind": "verdict", "event": {"task_id": "t-stats", "decision": "planned_and_dispatched", "channel": "topic t-stats", "handoff_verdict": "ok"}}

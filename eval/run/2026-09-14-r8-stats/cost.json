@@ -1,0 +1,20 @@
+{
+  "task": "t-stats",
+  "steps": {
+    "spec": 8,
+    "dev": 10,
+    "qa": 10
+  },
+  "budget_given": {
+    "spec->dev": 8,
+    "dev->qa": 5
+  },
+  "budget_remaining": null,
+  "note": "消息池多步；step 数为成员报告值",
+  "total_steps_estimate": 28,
+  "tokens": {
+    "metering": "unavailable",
+    "estimate": null
+  },
+  "concurrency_cap": "1 子代理/轮（DSH 会话限制）；线程级并发已实测（r10）"
+}

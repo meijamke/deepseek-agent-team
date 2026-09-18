@@ -1,0 +1,17 @@
+{
+  "task": "t-mustfail",
+  "steps": {
+    "qa": 7
+  },
+  "budget_given": {
+    "spec->qa": 5
+  },
+  "budget_remaining": null,
+  "note": "拒绝型任务：无交付，成本=读+判定+升级",
+  "total_steps_estimate": 7,
+  "tokens": {
+    "metering": "unavailable",
+    "estimate": null
+  },
+  "concurrency_cap": "1 子代理/轮（DSH 会话限制）；线程级并发已实测（r10）"
+}

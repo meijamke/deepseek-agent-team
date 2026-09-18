@@ -1,0 +1,838 @@
+{
+  "date": "2026-09-14",
+  "drills": [
+    {
+      "name": "F1-lock-stuck",
+      "detected": true,
+      "expected_check": "locks_released",
+      "expected_status": "fail",
+      "inject_result": {
+        "ok": true,
+        "lock": {
+          "file": "shared/probe-drill.md",
+          "version": 2,
+          "locked_by": "dev",
+          "ts": "2026-09-14T11:15:41.889292+00:00"
+        }
+      },
+      "bad_status": "fail",
+      "bad_findings": [
+        "stuck lock: shared/probe-drill.md held by dev"
+      ],
+      "recovered": true,
+      "bad_rep": {
+        "root": "/tmp/drill-29v54msi/ws",
+        "checks": [
+          {
+            "name": "agents_registered",
+            "title": "成员注册/状态机合法",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "stale_running",
+            "title": "崩溃故障：running 长时间无心跳",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "handoff_chain",
+            "title": "访问链一致性/预算/注册表对齐",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "envelope_valid",
+            "title": "信封合法且收发双方注册",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "evidence_gated",
+            "title": "产物引用存在 + 放行必须带证据",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "locks_released",
+            "title": "共享区锁全部释放",
+            "status": "fail",
+            "findings": [
+              "stuck lock: shared/probe-drill.md held by dev"
+            ]
+          },
+          {
+            "name": "card_diversity",
+            "title": "同质趋同：成员画像应相互区分",
+            "status": "pass",
+            "findings": []
+          }
+        ],
+        "passed": false,
+        "fail": 1,
+        "warn": 0,
+        "summary": "7 check groups, 1 failing, 0 warning"
+      },
+      "good_rep": {
+        "root": "/tmp/drill-29v54msi/ws",
+        "checks": [
+          {
+            "name": "agents_registered",
+            "title": "成员注册/状态机合法",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "stale_running",
+            "title": "崩溃故障：running 长时间无心跳",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "handoff_chain",
+            "title": "访问链一致性/预算/注册表对齐",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "envelope_valid",
+            "title": "信封合法且收发双方注册",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "evidence_gated",
+            "title": "产物引用存在 + 放行必须带证据",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "locks_released",
+            "title": "共享区锁全部释放",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "card_diversity",
+            "title": "同质趋同：成员画像应相互区分",
+            "status": "pass",
+            "findings": []
+          }
+        ],
+        "passed": true,
+        "fail": 0,
+        "warn": 0,
+        "summary": "7 check groups, 0 failing, 0 warning"
+      }
+    },
+    {
+      "name": "F2-pass-without-evidence",
+      "detected": true,
+      "expected_check": "evidence_gated",
+      "expected_status": "fail",
+      "inject_result": null,
+      "bad_status": "fail",
+      "bad_findings": [
+        "direct.jsonl: review_result pass without method/evidence"
+      ],
+      "recovered": true,
+      "bad_rep": {
+        "root": "/tmp/drill-c8nro4pz/ws",
+        "checks": [
+          {
+            "name": "agents_registered",
+            "title": "成员注册/状态机合法",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "stale_running",
+            "title": "崩溃故障：running 长时间无心跳",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "handoff_chain",
+            "title": "访问链一致性/预算/注册表对齐",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "envelope_valid",
+            "title": "信封合法且收发双方注册",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "evidence_gated",
+            "title": "产物引用存在 + 放行必须带证据",
+            "status": "fail",
+            "findings": [
+              "direct.jsonl: review_result pass without method/evidence"
+            ]
+          },
+          {
+            "name": "locks_released",
+            "title": "共享区锁全部释放",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "card_diversity",
+            "title": "同质趋同：成员画像应相互区分",
+            "status": "pass",
+            "findings": []
+          }
+        ],
+        "passed": false,
+        "fail": 1,
+        "warn": 0,
+        "summary": "7 check groups, 1 failing, 0 warning"
+      },
+      "good_rep": {
+        "root": "/tmp/drill-c8nro4pz/ws",
+        "checks": [
+          {
+            "name": "agents_registered",
+            "title": "成员注册/状态机合法",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "stale_running",
+            "title": "崩溃故障：running 长时间无心跳",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "handoff_chain",
+            "title": "访问链一致性/预算/注册表对齐",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "envelope_valid",
+            "title": "信封合法且收发双方注册",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "evidence_gated",
+            "title": "产物引用存在 + 放行必须带证据",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "locks_released",
+            "title": "共享区锁全部释放",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "card_diversity",
+            "title": "同质趋同：成员画像应相互区分",
+            "status": "pass",
+            "findings": []
+          }
+        ],
+        "passed": true,
+        "fail": 0,
+        "warn": 0,
+        "summary": "7 check groups, 0 failing, 0 warning"
+      }
+    },
+    {
+      "name": "F3-homogeneous",
+      "detected": true,
+      "expected_check": "card_diversity",
+      "expected_status": "warn",
+      "inject_result": null,
+      "bad_status": "warn",
+      "bad_findings": [
+        "role/capabilities/tools identical -> 共因失效风险: spec,dev"
+      ],
+      "recovered": true,
+      "bad_rep": {
+        "root": "/tmp/drill-m9reaz5a/ws",
+        "checks": [
+          {
+            "name": "agents_registered",
+            "title": "成员注册/状态机合法",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "stale_running",
+            "title": "崩溃故障：running 长时间无心跳",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "handoff_chain",
+            "title": "访问链一致性/预算/注册表对齐",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "envelope_valid",
+            "title": "信封合法且收发双方注册",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "evidence_gated",
+            "title": "产物引用存在 + 放行必须带证据",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "locks_released",
+            "title": "共享区锁全部释放",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "card_diversity",
+            "title": "同质趋同：成员画像应相互区分",
+            "status": "warn",
+            "findings": [
+              "role/capabilities/tools identical -> 共因失效风险: spec,dev"
+            ]
+          }
+        ],
+        "passed": true,
+        "fail": 0,
+        "warn": 1,
+        "summary": "7 check groups, 0 failing, 1 warning"
+      },
+      "good_rep": {
+        "root": "/tmp/drill-m9reaz5a/ws",
+        "checks": [
+          {
+            "name": "agents_registered",
+            "title": "成员注册/状态机合法",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "stale_running",
+            "title": "崩溃故障：running 长时间无心跳",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "handoff_chain",
+            "title": "访问链一致性/预算/注册表对齐",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "envelope_valid",
+            "title": "信封合法且收发双方注册",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "evidence_gated",
+            "title": "产物引用存在 + 放行必须带证据",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "locks_released",
+            "title": "共享区锁全部释放",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "card_diversity",
+            "title": "同质趋同：成员画像应相互区分",
+            "status": "pass",
+            "findings": []
+          }
+        ],
+        "passed": true,
+        "fail": 0,
+        "warn": 0,
+        "summary": "7 check groups, 0 failing, 0 warning"
+      }
+    },
+    {
+      "name": "F4-chain-reset",
+      "detected": true,
+      "expected_check": "handoff_chain",
+      "expected_status": "fail",
+      "inject_result": null,
+      "bad_status": "fail",
+      "bad_findings": [
+        "t-drill-ceee863b19e649b1.json: visited chain reset/broken expected=['dev'] got=[]"
+      ],
+      "recovered": true,
+      "bad_rep": {
+        "root": "/tmp/drill-f87hk9g2/ws",
+        "checks": [
+          {
+            "name": "agents_registered",
+            "title": "成员注册/状态机合法",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "stale_running",
+            "title": "崩溃故障：running 长时间无心跳",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "handoff_chain",
+            "title": "访问链一致性/预算/注册表对齐",
+            "status": "fail",
+            "findings": [
+              "t-drill-ceee863b19e649b1.json: visited chain reset/broken expected=['dev'] got=[]"
+            ]
+          },
+          {
+            "name": "envelope_valid",
+            "title": "信封合法且收发双方注册",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "evidence_gated",
+            "title": "产物引用存在 + 放行必须带证据",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "locks_released",
+            "title": "共享区锁全部释放",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "card_diversity",
+            "title": "同质趋同：成员画像应相互区分",
+            "status": "pass",
+            "findings": []
+          }
+        ],
+        "passed": false,
+        "fail": 1,
+        "warn": 0,
+        "summary": "7 check groups, 1 failing, 0 warning"
+      },
+      "good_rep": {
+        "root": "/tmp/drill-f87hk9g2/ws",
+        "checks": [
+          {
+            "name": "agents_registered",
+            "title": "成员注册/状态机合法",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "stale_running",
+            "title": "崩溃故障：running 长时间无心跳",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "handoff_chain",
+            "title": "访问链一致性/预算/注册表对齐",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "envelope_valid",
+            "title": "信封合法且收发双方注册",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "evidence_gated",
+            "title": "产物引用存在 + 放行必须带证据",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "locks_released",
+            "title": "共享区锁全部释放",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "card_diversity",
+            "title": "同质趋同：成员画像应相互区分",
+            "status": "pass",
+            "findings": []
+          }
+        ],
+        "passed": true,
+        "fail": 0,
+        "warn": 0,
+        "summary": "7 check groups, 0 failing, 0 warning"
+      }
+    },
+    {
+      "name": "F5-budget-exhausted",
+      "detected": true,
+      "expected_check": "handoff_chain",
+      "expected_status": "fail",
+      "inject_result": null,
+      "bad_status": "fail",
+      "bad_findings": [
+        "task t-drill2 latest handoff verdict=exhausted (remaining_budget <= 0: stop_and_escalate)"
+      ],
+      "recovered": true,
+      "bad_rep": {
+        "root": "/tmp/drill-d0br326i/ws",
+        "checks": [
+          {
+            "name": "agents_registered",
+            "title": "成员注册/状态机合法",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "stale_running",
+            "title": "崩溃故障：running 长时间无心跳",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "handoff_chain",
+            "title": "访问链一致性/预算/注册表对齐",
+            "status": "fail",
+            "findings": [
+              "task t-drill2 latest handoff verdict=exhausted (remaining_budget <= 0: stop_and_escalate)"
+            ]
+          },
+          {
+            "name": "envelope_valid",
+            "title": "信封合法且收发双方注册",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "evidence_gated",
+            "title": "产物引用存在 + 放行必须带证据",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "locks_released",
+            "title": "共享区锁全部释放",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "card_diversity",
+            "title": "同质趋同：成员画像应相互区分",
+            "status": "pass",
+            "findings": []
+          }
+        ],
+        "passed": false,
+        "fail": 1,
+        "warn": 0,
+        "summary": "7 check groups, 1 failing, 0 warning"
+      },
+      "good_rep": {
+        "root": "/tmp/drill-d0br326i/ws",
+        "checks": [
+          {
+            "name": "agents_registered",
+            "title": "成员注册/状态机合法",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "stale_running",
+            "title": "崩溃故障：running 长时间无心跳",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "handoff_chain",
+            "title": "访问链一致性/预算/注册表对齐",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "envelope_valid",
+            "title": "信封合法且收发双方注册",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "evidence_gated",
+            "title": "产物引用存在 + 放行必须带证据",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "locks_released",
+            "title": "共享区锁全部释放",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "card_diversity",
+            "title": "同质趋同：成员画像应相互区分",
+            "status": "pass",
+            "findings": []
+          }
+        ],
+        "passed": true,
+        "fail": 0,
+        "warn": 0,
+        "summary": "7 check groups, 0 failing, 0 warning"
+      }
+    },
+    {
+      "name": "F6-member-crash",
+      "detected": true,
+      "expected_check": "stale_running",
+      "expected_status": "fail",
+      "inject_result": null,
+      "bad_status": "fail",
+      "bad_findings": [
+        "dev running but stale 3.0h"
+      ],
+      "recovered": true,
+      "bad_rep": {
+        "root": "/tmp/drill-_2lcq_jk/ws",
+        "checks": [
+          {
+            "name": "agents_registered",
+            "title": "成员注册/状态机合法",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "stale_running",
+            "title": "崩溃故障：running 长时间无心跳",
+            "status": "fail",
+            "findings": [
+              "dev running but stale 3.0h"
+            ]
+          },
+          {
+            "name": "handoff_chain",
+            "title": "访问链一致性/预算/注册表对齐",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "envelope_valid",
+            "title": "信封合法且收发双方注册",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "evidence_gated",
+            "title": "产物引用存在 + 放行必须带证据",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "locks_released",
+            "title": "共享区锁全部释放",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "card_diversity",
+            "title": "同质趋同：成员画像应相互区分",
+            "status": "pass",
+            "findings": []
+          }
+        ],
+        "passed": false,
+        "fail": 1,
+        "warn": 0,
+        "summary": "7 check groups, 1 failing, 0 warning"
+      },
+      "good_rep": {
+        "root": "/tmp/drill-_2lcq_jk/ws",
+        "checks": [
+          {
+            "name": "agents_registered",
+            "title": "成员注册/状态机合法",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "stale_running",
+            "title": "崩溃故障：running 长时间无心跳",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "handoff_chain",
+            "title": "访问链一致性/预算/注册表对齐",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "envelope_valid",
+            "title": "信封合法且收发双方注册",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "evidence_gated",
+            "title": "产物引用存在 + 放行必须带证据",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "locks_released",
+            "title": "共享区锁全部释放",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "card_diversity",
+            "title": "同质趋同：成员画像应相互区分",
+            "status": "pass",
+            "findings": []
+          }
+        ],
+        "passed": true,
+        "fail": 0,
+        "warn": 0,
+        "summary": "7 check groups, 0 failing, 0 warning"
+      }
+    },
+    {
+      "name": "LIVE-F1-lock-stuck",
+      "detected": true,
+      "expected_check": "locks_released",
+      "expected_status": "fail",
+      "inject_result": {
+        "ok": true,
+        "lock": {
+          "file": "shared/probe-drill.md",
+          "version": 2,
+          "locked_by": "dev",
+          "ts": "2026-09-14T11:15:42.094866+00:00"
+        }
+      },
+      "bad_status": "fail",
+      "bad_findings": [
+        "stuck lock: shared/probe-drill.md held by dev"
+      ],
+      "recovered": true,
+      "bad_rep": {
+        "root": "/home/weiyuanxin/deepseek_agentteam",
+        "checks": [
+          {
+            "name": "agents_registered",
+            "title": "成员注册/状态机合法",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "stale_running",
+            "title": "崩溃故障：running 长时间无心跳",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "handoff_chain",
+            "title": "访问链一致性/预算/注册表对齐",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "envelope_valid",
+            "title": "信封合法且收发双方注册",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "evidence_gated",
+            "title": "产物引用存在 + 放行必须带证据",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "locks_released",
+            "title": "共享区锁全部释放",
+            "status": "fail",
+            "findings": [
+              "stuck lock: shared/probe-drill.md held by dev"
+            ]
+          },
+          {
+            "name": "card_diversity",
+            "title": "同质趋同：成员画像应相互区分",
+            "status": "pass",
+            "findings": []
+          }
+        ],
+        "passed": false,
+        "fail": 1,
+        "warn": 0,
+        "summary": "7 check groups, 1 failing, 0 warning"
+      },
+      "good_rep": {
+        "root": "/home/weiyuanxin/deepseek_agentteam",
+        "checks": [
+          {
+            "name": "agents_registered",
+            "title": "成员注册/状态机合法",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "stale_running",
+            "title": "崩溃故障：running 长时间无心跳",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "handoff_chain",
+            "title": "访问链一致性/预算/注册表对齐",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "envelope_valid",
+            "title": "信封合法且收发双方注册",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "evidence_gated",
+            "title": "产物引用存在 + 放行必须带证据",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "locks_released",
+            "title": "共享区锁全部释放",
+            "status": "pass",
+            "findings": []
+          },
+          {
+            "name": "card_diversity",
+            "title": "同质趋同：成员画像应相互区分",
+            "status": "pass",
+            "findings": []
+          }
+        ],
+        "passed": true,
+        "fail": 0,
+        "warn": 0,
+        "summary": "7 check groups, 0 failing, 0 warning"
+      }
+    }
+  ],
+  "summary": {
+    "total": 7,
+    "detected": 7,
+    "recovered": 7
+  }
+}

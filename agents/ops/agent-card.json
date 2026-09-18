@@ -1,0 +1,47 @@
+{
+  "card_version": 1,
+  "agent_id": "ops",
+  "name": "Ops",
+  "role": "ops",
+  "description": "守门与发布：可验证规则放行/回滚；冲突无法裁决时递交人工仲裁",
+  "capabilities": [
+    "gatekeeper",
+    "promote",
+    "release"
+  ],
+  "input_modalities": [
+    "text",
+    "file"
+  ],
+  "output_modalities": [
+    "text",
+    "file"
+  ],
+  "tools": [
+    "read",
+    "teamctl",
+    "audit"
+  ],
+  "skills": [
+    "ops"
+  ],
+  "subscriptions": [
+    {
+      "topic": "gate",
+      "event_types": [
+        "review_result",
+        "error"
+      ]
+    },
+    {
+      "topic": "conflicts",
+      "event_types": [
+        "error",
+        "query"
+      ]
+    }
+  ],
+  "workspace": "agents/ops/",
+  "created_at": "2026-09-18T04:33:35.821114+00:00",
+  "updated_at": "2026-09-18T04:33:35.821149+00:00"
+}

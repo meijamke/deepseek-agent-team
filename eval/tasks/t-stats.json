@@ -1,0 +1,27 @@
+{
+  "task_id": "t-stats",
+  "set": "boundary",
+  "version": 1,
+  "input": "实现共享工具模块 stats：mean(values) 与 median(values)，行为精确、含测试，由独立成员验证（P3 消息池/订阅多步任务）",
+  "goal": "跑通『消息池/订阅』协作：spec 策划（topic 广播）→ dev 实现+自测 → qa 独立执行验证，全程无 Manager",
+  "constraints": [
+    "交付物：shared/dev/stats.py、shared/dev/test_stats.py（仅标准库）",
+    "mean/median 须对空列表抛 ValueError；median 偶数个取中间两数平均",
+    "spec 任务单经 topic=t-stats 分发；成员用 topic 收发状态/结果（非仅点对点）",
+    "验证必须由 qa 独立执行（不得引用 dev 的自检输出）"
+  ],
+  "acceptance_criteria": [
+    {"id": "a1", "check": "python3.10 -m py_compile shared/dev/stats.py shared/dev/test_stats.py 退出码 0", "type": "execution"},
+    {"id": "a2", "check": "python3.10 shared/dev/test_stats.py 退出码 0（qa 亲跑，覆盖空列表/奇数/偶数/单元素）", "type": "execution"},
+    {"id": "a3", "check": "抽查 mean([1,2,3,4])=2.5 且 median([1,2,3,4])=2.5；mean([]) 抛 ValueError；median([3,1,2])==2", "type": "execution"},
+    {"id": "a4", "check": "消息链：task_assigned/status_update/review_result 均经 topic=t-stats 至少一次", "type": "holistic"}
+  ],
+  "verify_commands": [
+    "python3.10 -c \"import sys; sys.path.insert(0,'shared/dev'); import stats; assert stats.mean([1,2,3,4])==2.5; assert stats.median([1,2,3,4])==2.5; assert stats.median([1,2,3])==2; assert stats.median([3,1,2])==2; assert isinstance(stats.median([1,2,3]), int); assert isinstance(stats.mean([1,2]), float);\nimport sys as _s; _s.path.insert(0,'shared/dev'); import stats as _st;\ntry:\n    _st.mean([])\n    raise SystemExit('FAIL: no error')\nexcept ValueError:\n    pass\nprint('SPOT_CHECK_PASS')\"",
+    "python3.10 -c \"import sys; sys.path.insert(0,'shared/dev'); import stats; before=[3,1,2]; stats.median(before); assert before==[3,1,2], 'median mutated input'; print('NO_MUTATION_PASS')\""
+  ],
+  "notes": "verify_commands 为多行/等效合法命令（2026-09-14 修正：原 a3 单行模板 try/except 同行分号属 SyntaxError，由 qa 独立验证发现）",
+  "created_at": "2026-09-14T00:00:00+00:00",
+  "owner": "ops",
+  "notes": "P3 里程碑任务：验证 Ch10 消息总线/订阅拓扑（区别于 t-ping 的纯点对点）。完成后入保留集。"
+}

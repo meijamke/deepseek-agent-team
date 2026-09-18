@@ -1,0 +1,18 @@
+{
+  "handoff_version": 1,
+  "task_id": "t-ping",
+  "sender_id": "spec",
+  "recipient_id": "dev",
+  "goal": "实现 ping 端点并自证",
+  "constraints": [
+    "输出 shared/dev/ping.py; 内容含 def ping -> str"
+  ],
+  "accepted_facts": [],
+  "artifact_refs": [
+    "shared/_coordination/t-ping-spec.md"
+  ],
+  "remaining_budget": 6.0,
+  "budget_units": "steps",
+  "visited_agents": [],
+  "created_at": "2026-09-14T10:13:10.569467+00:00"
+}

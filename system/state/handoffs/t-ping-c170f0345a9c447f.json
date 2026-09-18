@@ -1,0 +1,21 @@
+{
+  "handoff_version": 1,
+  "task_id": "t-ping",
+  "sender_id": "dev",
+  "recipient_id": "qa",
+  "goal": "独立验证 ping 交付物",
+  "constraints": [],
+  "accepted_facts": [],
+  "artifact_refs": [
+    "shared/dev/ping.py"
+  ],
+  "remaining_budget": 4.0,
+  "budget_units": "steps",
+  "visited_agents": [
+    "dev"
+  ],
+  "created_at": "2026-09-14T10:17:07.144896+00:00",
+  "runtime_corrected": true,
+  "runtime_corrected_at": "2026-09-14T10:33:01.890401+00:00",
+  "runtime_correction": "backfilled visited_agents=['dev']: created under CLI --visited default bug (empty list bypassed registry inheritance, fixed in teamctl.split_visited); chain reconstructed from tasks registry"
+}

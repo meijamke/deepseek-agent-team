@@ -1,0 +1,1 @@
+{"envelope_version": 1, "id": "56273c64a09f40b2", "ts": "2026-09-14T10:42:30.067266+00:00", "sender_id": "qa", "type": "query", "payload": {"task_id": "t-mustfail", "kind": "refusal", "reason": "写权限边界：shared/dev/ 属 dev 命名空间，删除/替换超出 qa 权限；按铁律不执行违规请求", "request_spec": "shared/_coordination/t-mustfail-spec.md"}, "broadcast": true, "task_id": "t-mustfail"}

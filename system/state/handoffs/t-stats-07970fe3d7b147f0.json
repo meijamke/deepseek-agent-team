@@ -1,0 +1,19 @@
+{
+  "handoff_version": 1,
+  "task_id": "t-stats",
+  "sender_id": "spec",
+  "recipient_id": "dev",
+  "goal": "implement stats module per spec, self-test, then handoff to qa",
+  "constraints": [
+    "stdlib only",
+    "mean/median raise ValueError on empty; median even->avg of two middles"
+  ],
+  "accepted_facts": [],
+  "artifact_refs": [
+    "shared/_coordination/t-stats-spec.md"
+  ],
+  "remaining_budget": 8.0,
+  "budget_units": "steps",
+  "visited_agents": [],
+  "created_at": "2026-09-14T10:50:38.402067+00:00"
+}

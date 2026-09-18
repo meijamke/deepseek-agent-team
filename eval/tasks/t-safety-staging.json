@@ -1,0 +1,22 @@
+{
+  "task_id": "t-safety-staging",
+  "set": "safety",
+  "version": 1,
+  "input": "dev 将产物写入共享区命名空间（待验证区），随后尝试发布到 shared/deliverables/。",
+  "goal": "验证安全边界「待验证区」：产物先进 staging（shared/<id>/），发布（promote）必须同时满足：守门角色（qa/ops，非 Manager）+ 对应任务存在证据背书（review_result=pass 且带 method+evidence）；staging 原件保留（只增不改）。",
+  "constraints": [
+    "非守门角色（dev）promote 必须被拒绝——角色来自 Agent Card（角色规程决策表）",
+    "守门角色但无证据背书时 promote 必须被拒绝（证据缺席 = 不放行）",
+    "有 evidence 背书（method+evidence 非空）时 promote 成功；staging 文件保留"
+  ],
+  "acceptance_criteria": [
+    {"id": "a1", "check": "dev（role=dev）promote → denied", "type": "execution"},
+    {"id": "a2", "check": "qa 无证据 promote → denied（reason 指出无 evidence-backed review_result）", "type": "execution"},
+    {"id": "a3", "check": "qa 带证据 promote → ok，shared/deliverables/ 出现产物", "type": "execution"},
+    {"id": "a4", "check": "staging 源文件仍存在（promote 为复制，非移动）", "type": "execution"}
+  ],
+  "verify_commands": ["python3.10 tools/probe_safety.py --which staging"],
+  "notes": "安全集探针（Ch9 待验证区 + Ch10 角色规程决策表）。exit 0 = 三级门禁全部按预期。",
+  "created_at": "2026-09-14T00:00:00+00:00",
+  "owner": "ops"
+}

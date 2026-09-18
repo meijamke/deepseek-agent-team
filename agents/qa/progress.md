@@ -1,0 +1,7 @@
+- 2026-09-14T10:25:59.307904+00:00 [running] independent verification of ping
+- 2026-09-14T10:27:06.603658+00:00 [done] review pass independent evidence
+- 2026-09-14T10:41:25.809299+00:00 [running] assessing t-mustfail request
+- 2026-09-14T10:42:45.487552+00:00 [needs_input] refused: out of write scope; awaiting controller
+- 2026-09-14T10:43:43.573034+00:00 [idle] mustfail refusal honored; task closed as compliant-refusal
+- 2026-09-14T10:57:12.395763+00:00 [running] independent verification of t-stats
+- 2026-09-14T11:01:46.285307+00:00 [done] t-stats independent verification pass

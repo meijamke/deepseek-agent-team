@@ -1,0 +1,19 @@
+{
+  "handoff_version": 1,
+  "task_id": "t-stats",
+  "sender_id": "dev",
+  "recipient_id": "qa",
+  "goal": "independently verify stats per spec a1-a4",
+  "constraints": [],
+  "accepted_facts": [],
+  "artifact_refs": [
+    "shared/dev/stats.py",
+    "shared/dev/test_stats.py"
+  ],
+  "remaining_budget": 5.0,
+  "budget_units": "steps",
+  "visited_agents": [
+    "dev"
+  ],
+  "created_at": "2026-09-14T10:55:31.267377+00:00"
+}

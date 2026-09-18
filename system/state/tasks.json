@@ -1,0 +1,28 @@
+{
+  "t-ping": {
+    "task_id": "t-ping",
+    "goal": "实现 ping 端点并自证",
+    "visited": [
+      "dev",
+      "qa"
+    ],
+    "updated_at": "2026-09-14T10:17:07.145544+00:00"
+  },
+  "t-mustfail": {
+    "task_id": "t-mustfail",
+    "goal": "验证必须失败许可：违规请求应拒绝交付",
+    "visited": [
+      "qa"
+    ],
+    "updated_at": "2026-09-14T10:39:51.884839+00:00"
+  },
+  "t-stats": {
+    "task_id": "t-stats",
+    "goal": "implement stats module per spec, self-test, then handoff to qa",
+    "visited": [
+      "dev",
+      "qa"
+    ],
+    "updated_at": "2026-09-14T10:55:31.267994+00:00"
+  }
+}

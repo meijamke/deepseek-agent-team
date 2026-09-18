@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "dsh-team/handoff/v1",
+  "title": "Handoff Package (去中心化移交包)",
+  "description": "去中心化 handoff 的最小协议（《AI Agents in Depth》第 10 章「去中心化模式」，OpenAI Swarm 式）。接收者读任务包与产物引用、按需取证；预算、访问链与循环检测由运行时保留，不能由任一 Agent 自行删除。",
+  "type": "object",
+  "required": [
+    "handoff_version",
+    "task_id",
+    "sender_id",
+    "recipient_id",
+    "goal",
+    "remaining_budget",
+    "visited_agents",
+    "created_at"
+  ],
+  "properties": {
+    "handoff_version": { "const": 1 },
+    "task_id": { "type": "string", "minLength": 1 },
+    "sender_id": { "type": "string", "minLength": 1 },
+    "recipient_id": { "type": "string", "minLength": 1 },
+    "goal": { "type": "string", "minLength": 1, "description": "本轮目标（为什么做）" },
+    "constraints": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "硬约束、验收标准、不得违反的边界"
+    },
+    "accepted_facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fact", "source"],
+        "properties": {
+          "fact": { "type": "string" },
+          "source": { "type": "string", "description": "证据来源：文件路径 / 工具返回 / 前序移交包" }
+        }
+      },
+      "description": "已确认的事实与约束（前序阶段敲定的决策），带来源"
+    },
+    "artifact_refs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "结构化产物引用：文件路径而非文件内容（接口清晰原则）"
+    },
+    "remaining_budget": {
+      "type": "number",
+      "minimum": 0,
+      "description": "剩余预算（步数/token 配额抽象），<=0 时必须 stop_and_escalate"
+    },
+    "budget_units": { "type": "string", "enum": ["steps", "tokens", "calls"] },
+    "visited_agents": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "访问链；recipient 已出现 => reject(cycle)"
+    },
+    "created_at": { "type": "string" }
+  }
+}

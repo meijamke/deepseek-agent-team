@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "dsh-team/agent-card/v1",
+  "title": "Agent Card (成员名片 / A2A 风格能力声明)",
+  "description": "每个成员 Agent 的能力元数据（《AI Agents in Depth》第 10 章 A2A 协议·Agent Card）。解决能力发现问题：声明能做什么、输入输出模态、订阅哪些主题、如何认证。跨组织时可发布到约定公开地址。",
+  "type": "object",
+  "required": [
+    "card_version",
+    "agent_id",
+    "name",
+    "role",
+    "description",
+    "capabilities",
+    "input_modalities",
+    "output_modalities",
+    "tools",
+    "workspace",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "card_version": { "const": 1 },
+    "agent_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "name": { "type": "string" },
+    "role": { "type": "string", "description": "角色名，如 spec/architect/dev/qa/ops" },
+    "description": { "type": "string" },
+    "capabilities": { "type": "array", "items": { "type": "string" } },
+    "input_modalities": {
+      "type": "array",
+      "items": { "enum": ["text", "file", "image", "audio", "json"] }
+    },
+    "output_modalities": {
+      "type": "array",
+      "items": { "enum": ["text", "file", "json", "image", "audio"] }
+    },
+    "tools": { "type": "array", "items": { "type": "string" } },
+    "skills": { "type": "array", "items": { "type": "string" } },
+    "subscriptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["topic"],
+        "properties": {
+          "topic": { "type": "string" },
+          "event_types": {
+            "type": "array",
+            "items": {
+              "enum": ["task_assigned", "status_update", "result", "info_collected", "review_request", "review_result", "terminate", "terminate_ack", "query", "error", "note"]
+            }
+          }
+        }
+      },
+      "description": "消息池/总线模式下订阅的主题与事件类型"
+    },
+    "auth": { "type": "string", "description": "认证方式（本组织内默认 local-trust；跨组织按 A2A 声明）" },
+    "workspace": { "type": "string", "description": "私有工作区路径 agents/<agent_id>/" },
+    "created_at": { "type": "string" },
+    "updated_at": { "type": "string" }
+  }
+}

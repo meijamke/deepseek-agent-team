@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "dsh-team/message-envelope/v1",
+  "title": "Message Envelope (消息信封)",
+  "description": "多 Agent 控制平面消息信封。对照《AI Agents in Depth》第 10 章「Agent 间的通信与控制」：统一信封保证接收方可靠路由、解析，并使协作链路可追溯。",
+  "type": "object",
+  "required": [
+    "envelope_version",
+    "id",
+    "ts",
+    "sender_id",
+    "type",
+    "payload"
+  ],
+  "properties": {
+    "envelope_version": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$" },
+    "ts": { "type": "string", "description": "ISO-8601 UTC 时间戳" },
+    "sender_id": { "type": "string", "minLength": 1 },
+    "recipient_id": { "type": "string", "description": "点对点收件人；与 topic/broadcast 三选一" },
+    "topic": { "type": "string", "description": "订阅主题（消息池/总线模式）" },
+    "broadcast": { "type": "boolean", "description": "广播到所有存活 Agent" },
+    "type": {
+      "type": "string",
+      "enum": [
+        "task_assigned",
+        "status_update",
+        "result",
+        "info_collected",
+        "review_request",
+        "review_result",
+        "terminate",
+        "terminate_ack",
+        "query",
+        "error",
+        "note"
+      ]
+    },
+    "correlation_id": { "type": "string", "description": "一次任务请求-响应链路的关联 ID" },
+    "task_id": { "type": "string" },
+    "payload": { "type": "object", "description": "JSON 负载；内容随 type 而定" }
+  },
+  "anyOf": [
+    { "required": ["recipient_id"] },
+    { "required": ["topic"] },
+    { "required": ["broadcast"] }
+  ],
+  "not": {
+    "anyOf": [
+      { "required": ["recipient_id", "broadcast"] },
+      { "required": ["topic", "broadcast"] }
+    ]
+  }
+}

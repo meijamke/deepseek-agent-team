@@ -1,0 +1,2 @@
+{"ts": "2026-09-14T10:16:51.521235+00:00", "agent_id": "dev", "kind": "verdict", "event": {"selfcheck": "py_compile passed"}}
+{"ts": "2026-09-14T10:54:47.219741+00:00", "agent_id": "dev", "kind": "verdict", "event": {"task_id": "t-stats", "selfcheck": "py_compile exit 0; test_stats exit 0", "files": ["shared/dev/stats.py", "shared/dev/test_stats.py"]}}

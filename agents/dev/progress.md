@@ -1,0 +1,5 @@
+- 2026-09-14T10:14:48.662884+00:00 [running] implementing ping
+- 2026-09-14T10:17:35.243108+00:00 [done] delivered to qa for verification
+- 2026-09-14T10:44:08.822508+00:00 [idle] t-ping delivered+reviewed pass (R4); ready for next task
+- 2026-09-14T10:53:10.178968+00:00 [running] implementing stats per spec
+- 2026-09-14T10:55:37.216790+00:00 [done] stats delivered; handoff to qa

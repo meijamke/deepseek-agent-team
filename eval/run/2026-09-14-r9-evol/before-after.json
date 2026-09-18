@@ -1,0 +1,22 @@
+{
+  "before": {
+    "lock_records": 0,
+    "note": "raw write, no lock"
+  },
+  "after": {
+    "fs_write": {
+      "ok": true,
+      "path": "shared/dev/after.md",
+      "lock_version": 1
+    },
+    "lock_records": [
+      {
+        "file": "shared/dev/after.md",
+        "version": 1,
+        "locked_by": null,
+        "ts": "2026-09-14T11:11:56.506161+00:00"
+      }
+    ],
+    "audit_passed": true
+  }
+}

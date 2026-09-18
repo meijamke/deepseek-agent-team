@@ -1,0 +1,25 @@
+{
+  "parallel": {
+    "ok_counts": [
+      8,
+      8
+    ],
+    "windows_seconds": {
+      "dev": 0.109,
+      "qa": 0.109
+    },
+    "overlap": true
+  },
+  "contention": {
+    "first_attempt": {
+      "ok": false,
+      "reason": "already locked by ops (version 1)"
+    },
+    "after_release": {
+      "ok": true,
+      "lock_version": 2
+    },
+    "final_content": "won"
+  },
+  "note": "两个真实线程（dev/qa）并发 fs_write 各自命名空间；窗口重叠=真并行+命名空间隔离；竞争=乐观锁拒绝→重试成功"
+}

@@ -1,0 +1,48 @@
+{
+  "task": "t-m8-long",
+  "members": {
+    "spec": "done",
+    "architect": "done",
+    "dev": "done",
+    "qa": "done",
+    "ops": "done"
+  },
+  "promote": {
+    "ok": true,
+    "from": "shared/dev/order.py",
+    "to": "shared/deliverables/order.py",
+    "evidence_envelope": "b01455533668496d",
+    "promoted_by": "ops"
+  },
+  "deliverable": true,
+  "quota": {
+    "task_id": "t-m8-long",
+    "budget_units": "tokens",
+    "pool": 10000.0,
+    "spent": 2835.0,
+    "remaining": 7165.0,
+    "concurrency": 1,
+    "updated_at": "2026-09-18T06:35:25.694700+00:00"
+  },
+  "usage": {
+    "records": 27,
+    "total_est_tokens": 2835,
+    "by_agent": {
+      "spec": 383,
+      "architect": 855,
+      "dev": 676,
+      "qa": 634,
+      "ops": 287
+    },
+    "sources": [
+      "estimate"
+    ]
+  },
+  "emergence_events": [
+    "e1 topic self-created: architect published design topic (no central dispatch)",
+    "e2 new information per hop: ARCHITECTURE.md -> tests -> exec evidence",
+    "e3 evidence-gated promotion by ops (role table enforced in code)",
+    "e4 budget-aware: pool consumed, all members finished within pool"
+  ],
+  "manager_node": null
+}

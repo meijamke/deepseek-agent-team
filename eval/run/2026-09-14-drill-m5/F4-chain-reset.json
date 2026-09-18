@@ -1,0 +1,116 @@
+{
+  "name": "F4-chain-reset",
+  "detected": true,
+  "expected_check": "handoff_chain",
+  "expected_status": "fail",
+  "inject_result": null,
+  "bad_status": "fail",
+  "bad_findings": [
+    "t-drill-ceee863b19e649b1.json: visited chain reset/broken expected=['dev'] got=[]"
+  ],
+  "recovered": true,
+  "bad_rep": {
+    "root": "/tmp/drill-f87hk9g2/ws",
+    "checks": [
+      {
+        "name": "agents_registered",
+        "title": "成员注册/状态机合法",
+        "status": "pass",
+        "findings": []
+      },
+      {
+        "name": "stale_running",
+        "title": "崩溃故障：running 长时间无心跳",
+        "status": "pass",
+        "findings": []
+      },
+      {
+        "name": "handoff_chain",
+        "title": "访问链一致性/预算/注册表对齐",
+        "status": "fail",
+        "findings": [
+          "t-drill-ceee863b19e649b1.json: visited chain reset/broken expected=['dev'] got=[]"
+        ]
+      },
+      {
+        "name": "envelope_valid",
+        "title": "信封合法且收发双方注册",
+        "status": "pass",
+        "findings": []
+      },
+      {
+        "name": "evidence_gated",
+        "title": "产物引用存在 + 放行必须带证据",
+        "status": "pass",
+        "findings": []
+      },
+      {
+        "name": "locks_released",
+        "title": "共享区锁全部释放",
+        "status": "pass",
+        "findings": []
+      },
+      {
+        "name": "card_diversity",
+        "title": "同质趋同：成员画像应相互区分",
+        "status": "pass",
+        "findings": []
+      }
+    ],
+    "passed": false,
+    "fail": 1,
+    "warn": 0,
+    "summary": "7 check groups, 1 failing, 0 warning"
+  },
+  "good_rep": {
+    "root": "/tmp/drill-f87hk9g2/ws",
+    "checks": [
+      {
+        "name": "agents_registered",
+        "title": "成员注册/状态机合法",
+        "status": "pass",
+        "findings": []
+      },
+      {
+        "name": "stale_running",
+        "title": "崩溃故障：running 长时间无心跳",
+        "status": "pass",
+        "findings": []
+      },
+      {
+        "name": "handoff_chain",
+        "title": "访问链一致性/预算/注册表对齐",
+        "status": "pass",
+        "findings": []
+      },
+      {
+        "name": "envelope_valid",
+        "title": "信封合法且收发双方注册",
+        "status": "pass",
+        "findings": []
+      },
+      {
+        "name": "evidence_gated",
+        "title": "产物引用存在 + 放行必须带证据",
+        "status": "pass",
+        "findings": []
+      },
+      {
+        "name": "locks_released",
+        "title": "共享区锁全部释放",
+        "status": "pass",
+        "findings": []
+      },
+      {
+        "name": "card_diversity",
+        "title": "同质趋同：成员画像应相互区分",
+        "status": "pass",
+        "findings": []
+      }
+    ],
+    "passed": true,
+    "fail": 0,
+    "warn": 0,
+    "summary": "7 check groups, 0 failing, 0 warning"
+  }
+}

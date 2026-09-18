@@ -1,0 +1,2 @@
+- 2026-09-14T10:49:35.670119+00:00 [running] planning t-stats
+- 2026-09-14T10:50:51.374607+00:00 [done] t-stats planned & dispatched via topic

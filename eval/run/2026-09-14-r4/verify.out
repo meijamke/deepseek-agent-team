@@ -1,0 +1,6 @@
+$ python3.10 -c "import sys; sys.path.insert(0,'shared/dev'); import ping; r=ping.ping(); assert isinstance(r,str) and r=='pong', repr(r); print('REVIEW_PASS:', r)"
+REVIEW_PASS: pong
+$ echo $?
+0
+$ python3.10 -m py_compile shared/dev/ping.py && echo PY_COMPILE_OK
+PY_COMPILE_OK
