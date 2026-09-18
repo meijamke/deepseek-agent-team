@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>多 Agent 去中心化团队 · 控制台</title>
+<style>
+  :root{--bg:#0f141a;--panel:#171e26;--line:#26303c;--fg:#d7e0ea;--dim:#8b98a8;
+        --acc:#4da3ff;--ok:#41c98a;--warn:#e0a93c;--fail:#e25c5c;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  header{padding:14px 22px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  h1{font-size:17px;margin:0;font-weight:600}
+  .chip{padding:2px 9px;border-radius:10px;font-size:12px;border:1px solid var(--line);color:var(--dim)}
+  .chip.ok{color:var(--ok);border-color:var(--ok)}
+  .chip.fail{color:var(--fail);border-color:var(--fail)}
+  .chip.warn{color:var(--warn);border-color:var(--warn)}
+  main{padding:16px 22px;display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;min-height:120px}
+  .panel h2{font-size:13px;margin:0 0 8px;color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+  .card{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#1b2330}
+  .card .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .muted{color:var(--dim);font-size:12px}
+  .tag{font-size:11px;padding:1px 7px;border-radius:8px;background:#22303f;color:var(--acc)}
+  .tag.st{background:#263341;color:var(--fg)}
+  .msg{padding:5px 0;border-bottom:1px dashed #22303f;font-size:12.5px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:4px 8px;border-bottom:1px solid #22303f;vertical-align:top}
+  th{color:var(--dim);font-weight:600}
+  .st-idle{color:var(--dim)} .st-running{color:var(--acc)} .st-done{color:var(--ok)}
+  .st-needs_input{color:var(--warn)} .st-failed{color:var(--fail)}
+  .audit{display:flex;gap:6px;flex-wrap:wrap}
+  .audit span{padding:1px 8px;border-radius:8px;font-size:11.5px;border:1px solid var(--line)}
+  .audit .pass{color:var(--ok)} .audit .fail{color:var(--fail)} .audit .warn{color:var(--warn)}
+  .wide{grid-column:1/-1}
+  .mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+  footer{padding:10px 22px;color:var(--dim);font-size:12px;border-top:1px solid var(--line)}
+  #refresh{color:var(--dim);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>多 Agent 去中心化团队 · 控制台 <span id="refresh"></span></h1>
+  <span id="mission" class="chip">—</span>
+  <span id="auditbadge" class="chip">—</span>
+  <span id="usagebadge" class="chip">—</span>
+</header>
+<main>
+  <section class="panel wide"><h2>操作（S1 受控命令 · 人工干预点）</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">
+      <div class="card">
+        <div class="muted">创建任务</div>
+        <input id="c_task_id" placeholder="task_id" style="width:26%"> <input id="c_task_goal" placeholder="goal" style="width:42%">
+        <button onclick="cmd('task_new',{task_id:gv('c_task_id'),goal:gv('c_task_goal'),by:'operator'})">创建</button>
+      </div>
+      <div class="card">
+        <div class="muted">发送消息</div>
+        <input id="c_sender" placeholder="sender" style="width:18%"> <input id="c_type" placeholder="type" style="width:22%">
+        <input id="c_recipient" placeholder="recipient" style="width:18%">
+        <label><input type="checkbox" id="c_bcast">广播</label>
+        <input id="c_topic" placeholder="topic" style="width:14%">
+        <input id="c_task2" placeholder="task" style="width:14%">
+        <br><input id="c_payload" placeholder='payload JSON 如 {"k":"v"}' style="width:96%">
+        <button onclick="sendMsg()">发送</button>
+      </div>
+      <div class="card">
+        <div class="muted">状态</div>
+        <input id="c_agent" placeholder="agent" style="width:20%">
+        <select id="c_status"><option>idle</option><option>running</option><option>needs_input</option><option>done</option><option>failed</option></select>
+        <input id="c_progress" placeholder="progress" style="width:40%">
+        <button onclick="cmd('status_set',{agent:gv('c_agent'),status:gv('c_status'),progress:gv('c_progress')})">设置</button>
+      </div>
+      <div class="card">
+        <div class="muted">Promote 审批（qa/ops + evidence 门禁）</div>
+        <input id="p_agent" placeholder="agent" style="width:16%"> <input id="p_path" placeholder="shared/x/a.md" style="width:28%">
+        <input id="p_target" placeholder="target" style="width:16%"> <input id="p_by" placeholder="by" style="width:12%">
+        <input id="p_task" placeholder="task" style="width:16%">
+        <button onclick="cmd('promote_check',{agent:gv('p_agent'),path:gv('p_path'),target:gv('p_target'),by:gv('p_by'),task:gv('p_task')})">检查证据</button>
+        <button onclick="if(confirm('确认以人工身份执行 promote？'))cmd('promote',{agent:gv('p_agent'),path:gv('p_path'),target:gv('p_target'),by:gv('p_by'),task:gv('p_task')})">确认提升</button>
+      </div>
+      <div class="card">
+        <div class="muted">守卫</div>
+        <button onclick="cmd('audit',{})">运行审计</button>
+        <button onclick="cmd('probe',{})">安全探针</button>
+        <span id="probe_badge" class="muted"></span>
+      </div>
+      <div class="card">
+        <div class="muted">运行（S2 · 完整任务链 demo：spec→architect→dev→qa→ops）</div>
+        <button onclick="runDemo()">发起任务链</button>
+        <div id="jobs"></div>
+      </div>
+      <div class="card">
+        <div class="muted">真实 LLM 成员（S3 · OpenAI 兼容端点）</div>
+        <input id="l_agent" placeholder="agent" style="width:14%"> <input id="l_url" placeholder="base_url 如 https://api.deepseek.com/v1" style="width:34%">
+        <input id="l_key" type="password" placeholder="api_key" style="width:20%"> <input id="l_model" placeholder="model" style="width:18%">
+        <br><input id="l_task" placeholder="task(可选)" style="width:20%"> <input id="l_pool" placeholder="budget_pool(可选)" style="width:20%">
+        <input id="l_steps" placeholder="max_steps=8" style="width:16%">
+        <button onclick="runLLM()">运行成员</button>
+        <span class="muted">端点在浏览器同机可达；键不会被记录到工作区</span>
+      </div>
+      <div class="card">
+        <div class="muted">使命换挡（S4 · 沙盒预演 → 人工确认）</div>
+        <input id="m_title" placeholder="新 title" style="width:36%">
+        <input id="m_roles" placeholder="roles 逗号分隔: writer,editor,reviewer" style="width:44%">
+        <br><button onclick="cmd('mission_switch_dry',{title:gv('m_title'),roles:gv('m_roles').split(',')})">沙盒预演</button>
+        <button onclick="if(confirm('确认执行使命换挡（revision+1，roles.md 追加）？'))cmd('mission_apply',{title:gv('m_title'),roles:gv('m_roles').split(','),by:'operator'})">确认切换</button>
+      </div>
+    </div>
+    <div id="cmdlog" class="muted mono" style="margin-top:8px;max-height:120px;overflow:auto"></div>
+  </section>
+  <section class="panel"><h2>成员</h2><div id="agents"></div></section>
+  <section class="panel"><h2>任务 / 配额</h2><div id="tasks"></div></section>
+  <section class="panel wide"><h2>消息总线（尾部）</h2><div id="messages"></div></section>
+  <section class="panel"><h2>移交链（Handoff）</h2><div id="handoffs"></div></section>
+  <section class="panel"><h2>审计（8 项）</h2><div class="audit" id="audit"></div></section>
+  <section class="panel"><h2>用量 / 评测 / 交付物</h2><div id="meta"></div></section>
+</main>
+<footer>teamd · 只读快照每 3s 刷新 · 数据经协议层 web_snapshot（零副作用）</footer>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cls = st => 'st-' + (st || 'idle');
+const gv = id => document.getElementById(id).value.trim();
+
+function logCmd(text){
+  const el = document.getElementById('cmdlog');
+  el.innerHTML += esc(text) + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+async function cmd(action, params){
+  try{
+    const r = await fetch('/api/command', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action, params})});
+    const j = await r.json();
+    const brief = j.ok && j.result && j.result.ok === false ? JSON.stringify(j.result) : (j.ok ? JSON.stringify(j.result ?? j).slice(0,200) : j.error);
+    logCmd('> ' + action + (j.ok ? ' ✓ ' : ' ✗ ') + brief);
+    if (action === 'probe' || action === 'audit') tick();
+    return j;
+  }catch(e){ logCmd('> ' + action + ' ✗ 网络: ' + e); }
+}
+function sendMsg(){
+  const payload = document.getElementById('c_payload').value;
+  const params = {sender:gv('c_sender'), type:gv('c_type'), payload: payload? JSON.parse(payload):{},
+                  task:gv('c_task2') || undefined};
+  const rcp = gv('c_recipient'), topic = gv('c_topic');
+  if (document.getElementById('c_bcast').checked) params.broadcast = true;
+  else if (topic) params.topic = topic;
+  else params.recipient = rcp;
+  cmd('send', params);
+}
+async function runDemo(){
+  try{
+    const r = await fetch('/api/run', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({kind:'demo'})});
+    const j = await r.json();
+    logCmd('> runDemo ' + (j.ok ? '✓ 作业 ' + j.job_id : '✗ ' + j.error));
+    refreshJobs();
+  }catch(e){ logCmd('> runDemo ✗ 网络: ' + e); }
+}
+async function runLLM(){
+  try{
+    const params = {agent:gv('l_agent'), base_url:gv('l_url'), api_key:gv('l_key'), model:gv('l_model')};
+    if (gv('l_task')) params.task = gv('l_task');
+    if (gv('l_pool')) params.budget_pool = gv('l_pool');
+    if (gv('l_steps')) params.max_steps = parseInt(gv('l_steps'),10);
+    const r = await fetch('/api/run', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({kind:'llm', params})});
+    const j = await r.json();
+    logCmd('> runLLM ' + (j.ok ? '✓ 作业 ' + j.job_id : '✗ ' + j.error));
+    refreshJobs();
+  }catch(e){ logCmd('> runLLM ✗ 网络: ' + e); }
+}
+async function refreshJobs(){
+  try{
+    const r = await fetch('/api/jobs');
+    const j = await r.json();
+    document.getElementById('jobs').innerHTML = (j.jobs||[]).slice(-6).reverse().map(x =>
+      '<div class="muted mono">'+esc(x.job_id)+' ['+esc(x.status)+'] '+esc(x.kind)+
+      (x.result && x.result.out_dir ? ' → '+esc(x.result.out_dir) : '') +
+      (x.result && x.result.ok === false ? ' ✗ '+esc(x.result.error||'') : '') + '</div>').join('')
+      || '<div class="muted">无作业</div>';
+  }catch(e){}
+}
+function sse(){
+  try{
+    const es = new EventSource('/api/events');
+    es.onmessage = e => { try{ const ev = JSON.parse(e.data); if(ev.type==='job'){ refreshJobs(); tick(); } }catch(_){} };
+    es.onerror = () => { es.close(); setTimeout(sse, 5000); };
+  }catch(e){}
+}
+
+function render(s){
+  document.getElementById('refresh').textContent = '更新于 ' + (s.generated_at || '').slice(11,19);
+  const m = s.mission || {};
+  document.getElementById('mission').textContent =
+    (m.mission ? ('使命 ' + m.mission + ' · ' + (m.title || '') + ' · rev' + m.revision + ' · ' + (m.roles||[]).join('/')) : '使命未登记');
+  const a = s.audit || {passed:false,fail:0,warn:0};
+  const badge = document.getElementById('auditbadge');
+  badge.textContent = '审计 ' + (a.passed ? '通过' : (a.fail + ' 项失败')) + '（warn ' + a.warn + '）';
+  badge.className = 'chip ' + (a.passed ? 'ok' : 'fail');
+  const u = s.usage || {};
+  document.getElementById('usagebadge').textContent = '用量 ' + (u.total_est_tokens||0) + ' est-token / ' + (u.records||0) + ' 条';
+  document.getElementById('usagebadge').className = 'chip';
+
+  document.getElementById('agents').innerHTML = (s.agents||[]).map(x => `
+    <div class="card">
+      <div class="row"><b>${esc(x.agent_id)}</b>
+        <span class="tag">${esc(x.role)}</span>
+        <span class="tag st ${cls(x.status)}">${esc(x.status||'—')}</span>
+        <span class="muted">${esc(x.usage_total_tokens||0)} est-tok · ${esc(x.usage_records||0)} 记录</span></div>
+      <div class="muted">工具: ${esc((x.tools||[]).join(',')||'—')} · 订阅: ${esc((x.subscriptions||[]).map(s=>s.topic).join(',')||'—')}</div>
+      ${(x.progress_tail||[]).slice(-2).map(p=>'<div class="muted mono">'+esc(p)+'</div>').join('')}
+    </div>`).join('') || '<div class="muted">无成员</div>';
+
+  document.getElementById('tasks').innerHTML = (s.tasks||[]).map(t => `
+    <div class="card">
+      <div class="row"><b class="mono">${esc(t.task_id)}</b>
+        <span class="muted">${esc(t.goal||'')}</span>
+        <span class="tag">移交 ${esc(t.handoff_count)}</span></div>
+      <div class="muted mono">链: ${esc((t.visited||[]).join(' → ')||'—')}</div>
+      ${t.quota ? '<div class="muted">配额: 已用 '+esc(t.quota.spent)+' / '+esc(t.quota.pool)+' '+esc(t.quota.budget_units)+
+                  '（并发 '+esc(t.quota.concurrency??'∞')+'）</div>' : ''}
+    </div>`).join('') || '<div class="muted">无任务</div>';
+
+  document.getElementById('messages').innerHTML = (s.messages||[]).slice(-30).reverse().map(x => `
+    <div class="msg"><span class="muted mono">${esc((x.ts||'').slice(11,19))}</span>
+      <b>${esc(x.sender_id)}</b> → <span class="tag">${esc(x.type)}</span>
+      <span class="muted">${esc(x.recipient_id ? ('→ '+x.recipient_id) : (x.broadcast ? '广播' : '主题 '+x.topic))}</span>
+      <span class="muted mono">${esc(JSON.stringify(x.payload||{}).slice(0,120))}</span></div>`).join('') || '<div class="muted">无消息</div>';
+
+  document.getElementById('handoffs').innerHTML = (s.handoffs||[]).map(h => `
+    <div class="card"><div class="row"><b>${esc(h.sender_id)}</b> → <b>${esc(h.recipient_id)}</b>
+      <span class="tag">${esc(h.budget_units)} ${esc(h.remaining_budget)}</span>
+      <span class="muted">task ${esc(h.task_id)}</span></div>
+      <div class="muted mono">${esc((h.visited_agents||[]).join(' → '))}</div>
+      <div class="muted">${esc((h.goal||'').slice(0,80))}</div></div>`).join('') || '<div class="muted">无移交</div>';
+
+  document.getElementById('audit').innerHTML = (a.checks||[]).map(c =>
+    '<span class="'+c.status+'">'+esc(c.name)+': '+esc(c.status)+'</span>').join('');
+
+  const ev = (s.eval_runs||[]).map(r => esc(r.name)).join(', ') || '—';
+  const dv = (s.deliverables||[]).length || 0;
+  const ln = Object.entries(s.logs||{}).map(([k,v])=>k+':'+v.length).join(', ') || '—';
+  const conf = (s.conflicts||[]).map(esc).join(', ') || '无';
+  document.getElementById('meta').innerHTML =
+    '<table><tr><th>评测</th><td class="mono">'+ev+'</td></tr>'+
+    '<tr><th>交付物</th><td>'+dv+' 件</td></tr>'+
+    '<tr><th>冲突</th><td>'+conf+'</td></tr>'+
+    '<tr><th>日志(尾部条数)</th><td class="mono">'+ln+'</td></tr>'+
+    '<tr><th>来源标注</th><td class="mono">'+esc((u.sources||[]).join(',')||'—')+'</td></tr></table>';
+}
+
+async function tick(){
+  try{
+    const r = await fetch('/api/snapshot');
+    render(await r.json());
+  }catch(e){ document.getElementById('refresh').textContent = '加载失败: ' + e; }
+}
+tick(); setInterval(tick, 3000); setInterval(refreshJobs, 3000); sse();
+</script>
+</body>
+</html>

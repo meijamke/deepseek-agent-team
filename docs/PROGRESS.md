@@ -2,6 +2,54 @@
 
 按轮记录；证据优先（可复现产物/测试输出），与 PLAN.md 相互对照。
 
+## Round 13（2026-09-18）—— 网页部署 S0→S5 全落地 + 推送 GitHub
+
+**做了什么**（对应本轮指令「从 s0 到 s5，依次实现」）
+
+1. **S0 只读控制台**：`teamctl.web_snapshot()`（零副作用只读聚合：mission/history/agents/
+   tasks/quotas/messages/handoffs/conflicts/usage/logs/audit/eval_runs/deliverables）+
+   `GET /api/snapshot`；`web/index.html` 单文件无构建仪表盘（成员/任务配额/消息总线/移交链/
+   审计 8 项/用量/评测/交付物，3s 轮询 + 事件徽标）。
+2. **S1 受控命令**：`POST /api/command` → `teamctl.web_cmd()` 白名单（`task_new/send/
+   status_set/promote_check/promote/audit/probe`），可选 `--token` Bearer 鉴权；
+   网页按钮=人工干预点（promote 证据门禁展示、确认后调 `fs_promote`）。
+3. **S2 成员执行**：`POST /api/run kind=demo` → 子进程 `m8_demo.py`（5 角色
+   spec→architect→dev→qa→ops 全链，临时工作区）→ 作业队列 + `GET /api/jobs` +
+   SSE（`/api/events`）；证据 `eval/run/2026-09-18-web-demo-01/`（recap.json）。
+4. **S3 真实 LLM 成员**：`member.OpenAICompatLLM(base_url, api_key, model)`（OpenAI 兼容
+   `/chat/completions`）接入 `MemberRuntime`；计量取响应 `usage.total_tokens`，
+   `source_tag="real:openai-compat"`（诚实标注，不冒充估算）；`POST /api/run kind=llm`
+   异步全链路（mock 端点验证 15tokens×3、端点不可达 loud failure）。
+5. **S4 使命/安全面板**：快照含 `mission/mission_history/usage/audit/eval_runs`；
+   命令 `mission_switch_dry`（沙盒 copytree+审计，零副作用）/`mission_apply`
+   （registry revision+1 + mission-history.jsonl 追加 + roles.md 追加，`by='operator'`）；
+   UI 卡片：使命展示 + 沙盒预演 + 确认切换。
+6. **S5 独立部署加固**：`--root/--host/--port/--message-tail/--log-tail/--token`；
+   **安全响应头**（CSP `default-src 'none'` + nosniff + X-Frame DENY + no-referrer）；
+   **api_key 作业脱敏**（仅 worker 线程内存，`/api/jobs` 不出现在 params/result）；
+   部署/安全/多实例/生产文档 [web/README.md](web/README.md)。live：
+   `http://127.0.0.1:8090/`（teamd 脱离 DSH 独立运行）。
+7. **路线调整（如实记录）**：原设计「先嵌入 DSH（S0–S2）再独立部署（S5）」→ 改为
+   **直接独立 `teamd`**（协议层本就是纯标准库调用面，`web_snapshot`/`web_cmd` 白名单即
+   最小闭环；真 LLM 成员不依赖 DSH）。DSH 适配（5 角色 preset 或 DSH 内嵌 teamd）
+   保留为可选后续，见 [web-deployment.md](web-deployment.md) §6。
+8. **推送 GitHub**：仓库 `meijamke/deepseek-agent-team`（私有）经 Git Data API
+   更新至最新提交（见文末验证）。
+
+**验证证据**
+
+- 全量回归 **62/62 OK**：协议 29 + 成员 8 + 审计 9 + 演练 1 + 并行 2 + web 5 + teamd 5 + llm 3；
+- 真实工作区 `audit.py` → **8/8 pass（exit 0）**；`probe_safety.py all` → **3/3 pass（exit 0）**；
+- S2 网页任务链证据 `eval/run/2026-09-18-web-demo-01/`（5 成员 done、promote True、
+  配额剩余 7165.0、27 条用量记录）；
+- live 冒烟：`GET /api/snapshot` 返回全量键、`GET /api/jobs` 正常、页面含 S3/S4 卡片。
+
+**下一步（Round 14 候选）**
+
+- DSH 适配层（可选）：5 角色 agent preset 作为成员 / DSH 内嵌 teamd；
+- 读取端点鉴权（反向代理 Basic Auth）与 WebSocket 推送；
+- 「怎么用起来」实战：用网页控制台驱动一次真实（OpenAI 兼容）协作任务并沉淀复盘。
+
 ## Round 12（2026-09-18）—— 代码上 GitHub + 「怎么用起来」网页部署设计
 
 **做了什么**（对应本轮用户两项指令）

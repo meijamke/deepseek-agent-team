@@ -9,6 +9,7 @@
 - **文件系统约定**：[docs/filesystem.md](docs/filesystem.md)
 - **协议规范**：[docs/protocols/README.md](docs/protocols/README.md)
 - **进度**：[docs/PROGRESS.md](docs/PROGRESS.md)
+- **网页运行时**：[web/README.md](web/README.md)（teamd：S0–S5 部署/安全/多实例文档）
 
 ## 目录结构（四区域虚拟文件系统）
 
@@ -25,17 +26,22 @@ deepseek_agentteam/
 ├── eval/                 # 评估集（边界集+保留集+安全集）—— 见 PLAN M6
 ├── evolution/            # 持续进化证据与提案 —— 见 PLAN M7
 ├── docs/                 # 协议、角色、文件系统、进度
+├── web/                  # 网页运行时 teamd（纯标准库 HTTP+SSE+单文件控制台）
 └── tools/teamctl.py      # 协议层参考实现（stdlib，仅 Python 标准库）
 ```
 
-## 快速上手（协议层）
+## 快速上手
 
 ```bash
-python3.10 tools/tests/test_protocol.py      # 14 个单元测试
+# 协议层（CLI）
+python3.10 tools/tests/test_protocol.py      # 协议层单元测试
 python3.10 tools/teamctl.py --root . agent new --id spec --role spec
 python3.10 tools/teamctl.py --root . send --sender spec --type task_assigned --recipient dev --payload '{"task":"ping"}'
 python3.10 tools/teamctl.py --root . read --from dev --tail 5
+
+# 网页运行时（直接部署，S0–S5 已实现）
+python3.10 web/teamd.py --root . --port 8090   # 打开 http://127.0.0.1:8090/
 ```
 
-> 说明：目前协议层（数据/控制平面）已实现并测试通过；成员 Agent 将以 DSH 子 Agent /
-> agent preset 接入（见 PLAN M2），LLM 执行层为下一轮工作。
+> 说明：协议层（数据/控制平面）已实现并测试通过；`web/teamd.py` 提供网页部署运行
+> （只读控制台/受控命令/成员执行/真实 LLM/使命换挡，详见 [web/README.md](web/README.md)）。

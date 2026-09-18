@@ -21,7 +21,10 @@ import hashlib
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import uuid
 import pathlib
 
@@ -641,6 +644,319 @@ def quota_status(root, task_id):
             "concurrency": q.get("concurrency"), "updated_at": q.get("updated_at")}
 
 
+# ---------------------------------------------------------------- 网页快照（S0：只读聚合，零副作用）
+#
+# web_snapshot 是「网页控制台」的唯一只读数据契约：仪表盘只消费本函数输出；
+# 它不写任何文件（审计/探针也以只读方式调用），保证网页只是协议层的调用面。
+
+def _jsonl_tail_by_topic(p, limit):
+    out = []
+    for f in sorted(p["messages"].glob("*.jsonl")):
+        rows = _read_jsonl(f)
+        for m in rows[-limit:]:
+            out.append({"topic": f.stem, "id": m.get("id"), "ts": m.get("ts"),
+                        "sender_id": m.get("sender_id"), "type": m.get("type"),
+                        "recipient_id": m.get("recipient_id"),
+                        "task_id": m.get("task_id"),
+                        "broadcast": m.get("broadcast", False),
+                        "payload": m.get("payload", {})})
+    out.sort(key=lambda m: (m.get("ts", ""), m.get("id", "")))
+    return out[-50:]
+
+
+def _audit_report(root):
+    """只读调用 tools/audit.py 的 audit()；模块名注册进 sys.modules 避免重复加载。
+    audit.py 自己会 import teamctl —— 在本模块作为 __main__（CLI）或作为模块（测试）运行时均兼容。"""
+    import importlib.util
+    import sys as _sys
+    mod_name = "teamctl_audit_lazy"
+    mod = _sys.modules.get(mod_name)
+    if mod is None:
+        here = pathlib.Path(__file__).resolve().parent
+        spec = importlib.util.spec_from_file_location(mod_name, str(here / "audit.py"))
+        mod = importlib.util.module_from_spec(spec)
+        _sys.modules[mod_name] = mod
+        spec.loader.exec_module(mod)
+    return mod.audit(root)
+
+
+def web_snapshot(root, message_tail=10, log_tail=5):
+    """只读聚合快照：成员/任务/消息/移交/配额/用量/冲突/审计/使命/评测/交付物。
+
+    - 只做读操作；审计通过 audit.audit()（亦是只读）计算。
+    - 返回结构为 JSON 序列化对象（无 pathlib/内部对象），可直接 HTTP 输出。
+    """
+    p = ensure(root)
+    agents = []
+    for card in agent_list(root):
+        aid = card.get("agent_id")
+        st = status_get(root, aid) if aid else {"status": {}, "progress_tail": []}
+        us = usage_summary(root, agent_id=aid)
+        agents.append({
+            "agent_id": aid, "name": card.get("name"), "role": card.get("role"),
+            "description": card.get("description"),
+            "tools": card.get("tools", []), "skills": card.get("skills", []),
+            "subscriptions": card.get("subscriptions", []),
+            "status": st["status"].get("status"), "updated_at": st["status"].get("updated_at"),
+            "progress_tail": st["progress_tail"],
+            "usage_total_tokens": us["total_est_tokens"], "usage_records": us["records"],
+        })
+    tasks = []
+    for t in task_list(root):
+        q = quota_status(root, t["task_id"])
+        hs = [h for h in (task_show(root, t["task_id"]) or {}).get("handoffs", [])]
+        tasks.append({"task_id": t["task_id"], "goal": t["goal"], "visited": t["visited"],
+                      "updated_at": t["updated_at"], "quota": q, "handoff_count": len(hs),
+                      "handoffs": hs[-3:]})
+    handoffs = []
+    for f in sorted(p["handoffs"].glob("*.json"), key=lambda x: x.stat().st_mtime)[-10:]:
+        h = _read_json(f, {})
+        handoffs.append({"file": f.name, "task_id": h.get("task_id"),
+                         "sender_id": h.get("sender_id"), "recipient_id": h.get("recipient_id"),
+                         "goal": h.get("goal", ""), "visited_agents": h.get("visited_agents", []),
+                         "remaining_budget": h.get("remaining_budget"),
+                         "budget_units": h.get("budget_units"), "created_at": h.get("created_at")})
+    handoffs.reverse()
+    conflicts = []
+    conflicts_dir = p["state"] / "conflicts"
+    if conflicts_dir.exists():
+        for f in sorted(conflicts_dir.iterdir()):
+            if f.is_file():
+                conflicts.append(f.name)
+    eval_runs = []
+    evdir = p["root"] / "eval" / "run"
+    if evdir.exists():
+        for d in sorted(evdir.iterdir()):
+            if d.is_dir():
+                readme = d / "README.md"
+                first_line = ""
+                if readme.exists():
+                    with open(readme, encoding="utf-8") as fh:
+                        first_line = fh.readline().strip()
+                eval_runs.append({"name": d.name, "summary": first_line, "mtime": d.stat().st_mtime})
+    deliverables = []
+    dd = p["root"] / "shared" / "deliverables"
+    if dd.exists():
+        for f in sorted(dd.rglob("*")):
+            if f.is_file():
+                deliverables.append(str(f.relative_to(p["root"])))
+    logs = {}
+    for f in sorted(p["logs"].glob("*.jsonl")):
+        rows = _read_jsonl(f)
+        logs[f.stem] = rows[-log_tail:]
+    return {
+        "generated_at": now(),
+        "root": str(p["root"]),
+        "mission": mission_get(root),
+        "mission_history": _mission_history(root),
+        "agents": agents,
+        "tasks": tasks,
+        "messages": _jsonl_tail_by_topic(p, message_tail),
+        "handoffs": handoffs,
+        "conflicts": conflicts,
+        "usage": usage_summary(root),
+        "quotas": {t["task_id"]: t["quota"] for t in tasks if t["quota"]},
+        "logs": logs,
+        "audit": _audit_report(root),
+        "eval_runs": eval_runs,
+        "deliverables": deliverables,
+    }
+
+
+# ---------------------------------------------------------------- 网页命令层（S1：人类操作员的受控调用面）
+#
+# web_cmd 是网页「控制按钮」的唯一入口：动作白名单 + 参数校验 + 复用既有协议函数。
+# 所有写操作仍受协议层约束（_check_fs_scope / evidence 门禁 / 锁 / 状态机），
+# 浏览器永不直接触碰文件系统。
+
+def task_register(root, task_id, goal, by=None):
+    """任务注册表登记（ops 视图）：任务由运行时/操作员建立，成员按需协作。"""
+    p = ensure(root)
+    tasks = _read_json(p["tasks"], {})
+    if task_id in tasks:
+        return {"ok": False, "reason": "task %r already registered" % task_id}
+    tasks[task_id] = {"task_id": task_id, "goal": goal, "visited": [],
+                      "updated_at": now(), "created_by": by}
+    _write_json(p["tasks"], tasks)
+    return {"ok": True, "task_id": task_id, "goal": goal}
+
+
+def _run_probe(root):
+    """运行安全探针（tools/probe_safety.py；探针自带临时工作区，仅临时目录可写）。
+    root 参数保留为占位（当前探针为确定性自包含，不依赖工作区）。"""
+    here = pathlib.Path(__file__).resolve().parent
+    try:
+        cp = subprocess.run([sys.executable, str(here / "probe_safety.py")],
+                            capture_output=True, text=True, timeout=180)
+        tail = (cp.stdout or "").splitlines()[-6:]
+        return {"ok": cp.returncode == 0, "exit_code": cp.returncode,
+                "tail": tail, "cmd": "probe_safety"}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "exit_code": None, "tail": ["probe error: %s: %s" % (type(e).__name__, e)]}
+
+
+def _run_demo(root):
+    """S2：网页发起完整任务 —— 运行 m8_demo（5 角色 spec→architect→dev→qa→ops 全链）。
+    演示在临时工作区完成，证据（recap.json/README.md）写入 eval/run/（仓库内只增不改）。"""
+    here = pathlib.Path(__file__).resolve().parent
+    p = ensure(root)
+    stamp = now().replace(":", "").replace("+", "-")[:19]
+    n = 0
+    while True:
+        n += 1
+        cand = p["root"] / "eval" / "run" / ("%s-web-demo-%02d" % (stamp[:10], n))
+        if not cand.exists():
+            break
+    try:
+        cp = subprocess.run([sys.executable, str(here / "m8_demo.py"), str(cand)],
+                            capture_output=True, text=True, timeout=300)
+        ok = cp.returncode == 0
+        return {"ok": ok, "exit_code": cp.returncode, "out_dir": str(cand),
+                "tail": (cp.stdout or "").splitlines()[-8:],
+                "stderr_tail": (cp.stderr or "").splitlines()[-3:]}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "exit_code": None, "out_dir": str(cand),
+                "tail": ["demo error: %s: %s" % (type(e).__name__, e)]}
+
+
+def _member_mod():
+    """延迟加载 team/member.py（复用已加载模块；member.py 自己会导入 teamctl）。"""
+    import importlib.util
+    mod_name = "teamctl_member_lazy"
+    mod = sys.modules.get(mod_name)
+    if mod is None:
+        here = pathlib.Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location(mod_name, str(here / "team" / "member.py"))
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[mod_name] = mod
+        spec.loader.exec_module(mod)
+    return mod
+
+
+def _run_llm_member(root, params):
+    """S3：以 OpenAI 兼容后端运行一个真实成员（同步执行；调用方（teamd）用作业线程包住）。"""
+    mm = _member_mod()
+    agent = params.get("agent")
+    if not agent or not params.get("base_url") or not params.get("model"):
+        raise ValueError("run_llm needs agent/base_url/model (api_key optional for local endpoints)")
+    llm = mm.OpenAICompatLLM(params["base_url"], params.get("api_key", ""), params["model"],
+                             temperature=float(params.get("temperature", 0.2)))
+    summary = mm.run_member(root, agent, llm,
+                            max_steps=int(params.get("max_steps", 8)),
+                            task_id=params.get("task"),
+                            budget_pool_task=params.get("budget_pool"))
+    return {"summary": summary, "backend": llm.source_tag}
+
+
+def _mission_history(root):
+    p = ensure(root)
+    return _read_jsonl(p["quotas"].parent / "mission-history.jsonl")[-10:]
+
+
+def mission_switch_dry(root, params):
+    """使命换挡·沙盒演练（roles.md 规程第 2–3 步在沙盒执行）：
+    当前工作区拷贝上登记 v(N+1) + 审计；不接触真实工作区任何文件。"""
+    cur = mission_get(root) or {}
+    mission = params.get("mission", cur.get("mission", "A"))
+    title = params.get("title", "")
+    roles = params.get("roles") or []
+    if not roles:
+        raise ValueError("mission_switch_dry needs roles (comma list or list)")
+    rev = int(cur.get("revision", 0)) + 1
+    with tempfile.TemporaryDirectory() as tmpdir:
+        sandbox = pathlib.Path(tmpdir) / "ws"
+        shutil.copytree(pathlib.Path(root).resolve(), sandbox,
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".git",
+                                                      "eval", "node_modules"))
+        reg = mission_init(str(sandbox), mission, title, roles, revision=rev)
+        rep = _audit_report(str(sandbox))
+    return {"suggested_revision": rev, "mission": reg, "audit": rep}
+
+
+def mission_apply(root, params):
+    """人工确认后执行换挡（信任锚点=人）：registry revision+1 → 历史 JSONL（只增）→ roles.md 追加版本章节。
+    成员卡片不自动迁移（audit.card_role_known 给出结果，需按规程换卡后重新审计）。"""
+    p = ensure(root)
+    cur = mission_get(root) or {}
+    mission = params.get("mission", cur.get("mission", "A"))
+    title = params.get("title", cur.get("title", ""))
+    roles = params.get("roles") or []
+    if not roles:
+        raise ValueError("mission_apply needs roles")
+    rev = int(cur.get("revision", 1)) + 1
+    reg = mission_init(root, mission, title, roles, revision=rev)
+    _append_jsonl(p["quotas"].parent / "mission-history.jsonl",
+                  {"ts": now(), "revision": rev, "mission": mission, "title": title,
+                   "roles": list(roles), "applied_by": params.get("by", "operator")})
+    md = p["root"] / "docs" / "roles.md"
+    if not md.exists():
+        md.parent.mkdir(parents=True, exist_ok=True)
+        md.write_text("# 角色（roles.md）\n\n（由 teamd mission_apply 首次生成）\n", encoding="utf-8")
+    with open(md, "a", encoding="utf-8") as f:
+        f.write("\n\n## 使命变更 %s（web 换挡，rev %d）\n\n" % (now()[:10], rev))
+        f.write("- mission: `%s`；title: %s；roles: %s\n" % (mission, title, ",".join(roles)))
+        f.write("- 依据使命变更规程（快照 → 草案 → 三层验证 → 安全/审计 → 沙箱 → 人工确认）；"
+                "成员卡片须按新角色表整体迁移后重新审计。\n")
+    return {"registry": reg, "history": _mission_history(root), "audit": _audit_report(root)}
+
+
+def web_cmd(root, action, params=None):
+    """受控命令层。返回 {"ok": bool, "result": ...} 或 {"ok": False, "error": ...}。
+    仅动作白名单可执行；promote 先 dry-run (promote_check) 由人工确认证据后再执行。"""
+    params = params or {}
+    try:
+        if action == "snapshot":
+            return {"ok": True, "result": web_snapshot(root)}
+        if action == "task_new":
+            tid = params.get("task_id"); goal = params.get("goal", "")
+            if not tid or not goal:
+                raise ValueError("task_new needs task_id and goal")
+            return {"ok": True, "result": task_register(root, tid, goal, params.get("by"))}
+        if action == "send":
+            sender = params.get("sender"); mtype = params.get("type")
+            if not sender or not mtype:
+                raise ValueError("send needs sender and type")
+            payload = params.get("payload", {})
+            if isinstance(payload, str):
+                payload = json.loads(payload)
+            rec = send(root, sender, mtype, params.get("recipient"), params.get("topic"),
+                       bool(params.get("broadcast")), payload, params.get("task"),
+                       params.get("correlation"))
+            return {"ok": True, "result": {"id": rec["id"], "ts": rec["ts"]}}
+        if action == "status_set":
+            if not params.get("agent") or not params.get("status"):
+                raise ValueError("status_set needs agent and status")
+            return {"ok": True, "result": status_set(root, params["agent"], params["status"], params.get("progress"))}
+        if action == "promote_check":
+            ev = _evidence_pass_for_task(root, params.get("task", ""))
+            card = _read_json(ensure(root)["agents"] / (params.get("by") or "?") / "agent-card.json", {})
+            return {"ok": True, "result": {
+                "evidence": ev, "promoter_role": card.get("role"),
+                "gate_ok": bool(ev) and card.get("role") in ("qa", "ops")}}
+        if action == "promote":
+            if not all(params.get(k) for k in ("agent", "path", "target", "by", "task")):
+                raise ValueError("promote needs agent/path/target/by/task")
+            return {"ok": True, "result": fs_promote(root, params["agent"], params["path"],
+                                                     params["target"], params["by"], params["task"])}
+        if action == "audit":
+            return {"ok": True, "result": _audit_report(root)}
+        if action == "probe":
+            return {"ok": True, "result": _run_probe(root)}
+        if action == "run_demo":
+            return {"ok": True, "result": _run_demo(root)}
+        if action == "run_llm":
+            return {"ok": True, "result": _run_llm_member(root, params)}
+        if action == "mission_switch_dry":
+            return {"ok": True, "result": mission_switch_dry(root, params)}
+        if action == "mission_apply":
+            return {"ok": True, "result": mission_apply(root, params)}
+        return {"ok": False, "error": "unknown action %r (whitelist: %s)"
+                % (action, "snapshot/task_new/send/status_set/promote_check/promote/audit/probe/"
+                           "run_demo/run_llm/mission_switch_dry/mission_apply")}
+    except (SchemaError, ValueError, KeyError, json.JSONDecodeError, FileNotFoundError) as e:
+        return {"ok": False, "error": "%s: %s" % (type(e).__name__, e)}
+
+
 # ---------------------------------------------------------------- 待验证区 → 发布（Ch9 安全边界）
 
 def _evidence_pass_for_task(root, task_id):
@@ -828,6 +1144,15 @@ def _cli():
     a.add_argument("--roles", nargs="*", required=True)
     b = ss.add_parser("get")
 
+    s = sp("web", "网页控制台数据契约（S0+：snapshot 只读；命令类见 web command）")
+    ss = s.add_subparsers(dest="sub", required=True)
+    a = ss.add_parser("snapshot", help="只读聚合快照（零副作用）")
+    a.add_argument("--message-tail", type=int, default=10)
+    a.add_argument("--log-tail", type=int, default=5)
+    c = ss.add_parser("command", help="受控命令（白名单动作，参数 JSON）")
+    c.add_argument("--action", required=True)
+    c.add_argument("--params", default="{}", help="JSON 参数对象")
+
     args = ap.parse_args()
     root = args.root or (pathlib.Path(__file__).resolve().parent.parent)
     try:
@@ -931,6 +1256,13 @@ def _cli():
                           file=sys.stderr)
                     sys.exit(2)
                 print(json.dumps(r, ensure_ascii=False, indent=2))
+        elif args.cmd == "web":
+            if args.sub == "snapshot":
+                print(json.dumps(web_snapshot(root, args.message_tail, args.log_tail),
+                                 ensure_ascii=False, indent=2))
+            else:
+                print(json.dumps(web_cmd(root, args.action, json.loads(args.params)),
+                                 ensure_ascii=False, indent=2))
     except (SchemaError, ValueError, KeyError, json.JSONDecodeError, FileNotFoundError) as e:
         print("ERROR: %s" % e, file=sys.stderr)
         sys.exit(2)

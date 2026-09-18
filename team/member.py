@@ -13,9 +13,12 @@ team/member.py — 成员运行时：ReAct 循环 + 上下文装配 + 协议工�
 """
 from __future__ import annotations
 
+import json
 import pathlib
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "tools"))
 
@@ -45,6 +48,8 @@ class LLMBackend:
     可选 implement estimate(context, action) -> int：由真实后端上报 token 用量
     （DSH 子 Agent 适配器可映射 tokenMeter）；缺省走协议层启发式估算（estimate 标注）。"""
 
+    source_tag = "estimate"  # 计量来源：estimate | real:<adapter>（不冒充真实值）
+
     def act(self, context):  # pragma: no cover - 接口
         raise NotImplementedError
 
@@ -70,6 +75,86 @@ class ScriptedLLM(LLMBackend):
     def estimate(self, context, action):
         if self.est_tokens is not None:
             return int(self.est_tokens)
+        return teamctl.estimate_tokens(str(context) + str(action))
+
+
+class OpenAICompatLLM(LLMBackend):
+    """真实 LLM 后端：OpenAI 兼容 Chat Completions 协议（DeepSeek/vLLM/任一兼容端点）。
+
+    - act(context)：系统提示词给出「动作空间 + 铁律」，返回单个 action JSON（剥除代码围栏）；
+    - estimate：优先用响应中的 usage（prompt+completion，真实计量），失败则回退启发式估算；
+    - source_tag = real:openai-compat（计量诚实标注，不冒充其他后端）。
+    """
+
+    source_tag = "real:openai-compat"
+
+    ACTION_SCHEMA_HINT = (
+        "你必须只输出一个 JSON 对象（不要代码围栏/解释），op ∈ "
+        + "|".join(OPS)
+        + "。常用字段：status/progress、type/topic/recipient/broadcast/payload/task_id、"
+        "path/content、cmd、recipient/goal/budget/budget_units/artifacts、kind/event。"
+    )
+
+    def __init__(self, base_url, api_key, model, temperature=0.2, timeout=90):
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
+        self.model = model
+        self.temperature = temperature
+        self.timeout = timeout
+        self.last_usage = None
+
+    def _system_prompt(self):
+        return (
+            "你是多 Agent 去中心化团队的一名成员。团队无中心 Manager；"
+            "你通过共享工作区（agents/<你>/ 私有、shared/<你>/ 命名空间）与消息总线协作；"
+            "身份文件 agent-card.json 不可写；共享区写入先 lock 且冲突即停止；"
+            "预算来自移交包（剩余预算<=0 时应 op=fail 或尽快 done）；"
+            "任务单经 messages 主题分发；交付物经 qa/ops 证据门禁 promote。\n"
+            + self.ACTION_SCHEMA_HINT
+        )
+
+    def act(self, context):
+        body = {
+            "model": self.model,
+            "temperature": self.temperature,
+            "messages": [
+                {"role": "system", "content": self._system_prompt()},
+                {"role": "user", "content": "context:\n"
+                 + json.dumps(context, ensure_ascii=False, indent=2)
+                 + "\n\n请依据 context 输出下一个 action JSON。"},
+            ],
+        }
+        req = urllib.request.Request(
+            self.base_url + "/chat/completions",
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json",
+                     "Authorization": "Bearer " + self.api_key},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                resp = json.loads(r.read().decode("utf-8"))
+        except urllib.error.URLError as e:
+            raise ToolError("LLM endpoint unreachable: %s" % e)
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")[:300]
+            raise ToolError("LLM endpoint HTTP %s: %s" % (e.code, detail))
+        try:
+            content = resp["choices"][0]["message"]["content"]
+            self.last_usage = resp.get("usage")
+            content = content.strip()
+            if content.startswith("```"):
+                content = content.split("```")[1]
+                if content.startswith("json"):
+                    content = content[4:]
+            return json.loads(content)
+        except (KeyError, IndexError, ValueError) as e:
+            raise ToolError("LLM response not parseable: %s (content=%r)"
+                            % (e, str(content)[:200] if "content" in locals() else ""))
+
+    def estimate(self, context, action):
+        if isinstance(self.last_usage, dict) and self.last_usage.get("total_tokens"):
+            return int(self.last_usage["total_tokens"])
         return teamctl.estimate_tokens(str(context) + str(action))
 
 
@@ -256,8 +341,9 @@ class MemberRuntime:
             est = int(self.llm.estimate(context, action))
         except (NotImplementedError, AttributeError, TypeError):
             est = teamctl.estimate_tokens(str(context) + str(action))
+        source = getattr(self.llm, "source_tag", None) or "estimate"
         rec = teamctl.usage_record(self.root, self.agent_id, step, est,
-                                   source="estimate", op=action.get("op"), task_id=self.task_id)
+                                   source=source, op=action.get("op"), task_id=self.task_id)
         self.est_tokens_total += est
         self._last_est = est
         return rec
@@ -302,3 +388,32 @@ class MemberRuntime:
 def run_member(root, agent_id, llm, max_steps=8, task_id=None, budget_pool_task=None):
     return MemberRuntime(root, agent_id, llm, max_steps=max_steps,
                          task_id=task_id, budget_pool_task=budget_pool_task).run()
+
+
+def _cli():
+    """S3：真实 LLM 成员命令行入口（OpenAI 兼容端点）。
+    例：python3.10 team/member.py --root . --agent dev --task t1 --budget-pool t1 \
+        --base-url https://api.deepseek.com/v1 --api-key $KEY --model deepseek-chat
+    """
+    import argparse
+    ap = argparse.ArgumentParser(prog="member", description="成员运行时（真实 LLM 后端）")
+    ap.add_argument("--root", default=None, help="工作区根目录")
+    ap.add_argument("--agent", required=True)
+    ap.add_argument("--task")
+    ap.add_argument("--budget-pool")
+    ap.add_argument("--max-steps", type=int, default=8)
+    ap.add_argument("--base-url", required=True, help="OpenAI 兼容端点根（如 https://api.deepseek.com/v1）")
+    ap.add_argument("--api-key", required=True)
+    ap.add_argument("--model", required=True)
+    ap.add_argument("--temperature", type=float, default=0.2)
+    args = ap.parse_args()
+    root = args.root or str(pathlib.Path(__file__).resolve().parent.parent)
+    llm = OpenAICompatLLM(args.base_url, args.api_key, args.model, temperature=args.temperature)
+    summary = run_member(root, args.agent, llm, max_steps=args.max_steps,
+                         task_id=args.task, budget_pool_task=args.budget_pool)
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0 if summary.get("final") == "done" else 1
+
+
+if __name__ == "__main__":
+    sys.exit(_cli())
