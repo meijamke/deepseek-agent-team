@@ -54,6 +54,24 @@ ln -s /绝对路径/到/plugins/team-room ~/.dsh/profiles/<profile>/node_modules
 `patchReload: live` 会热加载该行(无需重启);删除/注释这几行即热卸载。
 客户端加载需要刷新一次页面(新的 bundle 会进入 boot graph)。
 
+## 验证热插拔(运行中的 GUI,无需重启)
+
+Web 服务暴露一个未鉴权的诊断 SSE 端点 `/plugins/events`,连接即返回当前
+`window.__DSH_BOOT__` 模块图(entry 列表 + 批次 + 每个 bundle 的 rev URL):
+
+```sh
+# 1) 看是否已加载:图里应出现 "@meijamke/dsh-team-room"
+curl -sN --max-time 5 http://127.0.0.1:3081/plugins/events | grep -o '@meijamke/dsh-team-room' | head -1
+
+# 2) 取该 entry 的 url(形如 /plugins/??@meijamke/dsh-team-room/client.js&rev=<rev>),
+#    直接向 bundle 路由请求,200 即代表该插件已在运行进程的 boot graph 中:
+curl -s -o /dev/null -w '%{http_code}\n' "http://127.0.0.1:3081/plugins/??@meijamke/dsh-team-room/client.js&rev=<图例中的rev>"
+```
+
+热卸载:注释掉 `cordis.patch.yml` 中 team-room 的 insert 行,几秒后
+`/plugins/events` 的图里该条目消失,旧 URL 返回 404;取消注释后再次出现
+(rev 每次 HMR 重算会变化,以图里的新值为准)。
+
 ## 开发
 
 ```sh
