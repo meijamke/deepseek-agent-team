@@ -2,6 +2,89 @@
 
 按轮记录；证据优先（可复现产物/测试输出），与 PLAN.md 相互对照。
 
+## Round 16（2026-09-20）—— 免初始化快速开始 + 按 DSH 实机 Web UI 重构（亮色）
+
+**做了什么**
+
+1. **快速开始免初始化**：`git clone → teamd → 打开网页 → 页面建团队`，不再需要先 CLI
+   初始化使命。新增 `teamctl.ensure_console()`（缺 `state/mission.json` 时按 software 模板
+   登记默认团队 + 5 成员卡，幂等），`teamd.serve()` 启动即引导；README 快速开始同步改为
+   「克隆 → 启动 → 网页建团队/切团队」。
+2. **依据 DSH 实机 Web UI 重构（亮色）**：用户上传 DSH 截图（亮色）并提供实机地址
+   `http://127.0.0.1:3081/?token=…`。按「DSH 源码 token + 实机 CSS + 截图几何」三方对照：
+   - 主题 = `design-platform.css` **亮色语义 token**（默认 body 亮色）：`#fff` 底 /
+     `#f9fafb` 侧栏 / `#ebedf2` 选中 / `0.5px rgba(0,0,0,.04/.10/.12/.16)` 描边 /
+     `#0f1115` 主文字 / 品牌 `#5686fe/#4176e6` / ok `#22c55e` / warn `#dd8629` / err `#ec1313`。
+   - 几何 = AppFrame/columns（侧栏 280px、<1024 收 56 rail、分隔线 0.5px）、
+     ConversationRoot（内容宽 clamp(680,64%,920) 居中）、InputBar（输入卡 r22 +32 宽、底 8）、
+     Button（胶囊 r18/h36，primary **深色 `#0f1115`**）、Input（h32/r8/0.5px l4）、
+     MessageItem（本人气泡 deepseek-50 `#edf3fe`/r22/右上）。
+   - 截图核对：主区白、侧栏 `#f9fafb`、选中项 `#ebedf2`、发丝线、底部输入卡 → 全部吻合。
+3. **前端防回归**：新增可复现冒烟 `tools/ui_smoke.js`（DOM 打桩：document/fetch/
+   EventSource；真实快照 fixture 或内置等价 fixture）覆盖 tick/render/show/
+   loadTemplates/sendMsg/createTeam/switchTeam/runLLM/runDemo/refreshJobs；Python 核对
+   getElementById id 全存在、onclick 函数存在。（Round 15 曾因 `const badge` 重复声明整页
+   JS 失效，故把 JS 冒烟固化进仓库。）
+
+**验证证据**
+
+- 全量回归：协议 29 + 成员 8 + 审计 9 + 演练 1 + 并行 2 + web **10** + teamd **7** + llm 3
+  = **69/69 OK**（新增 test_web `test_ensure_console_bootstrap_idempotent`、
+  test_teamd `test_bare_start_bootstrap`）。
+- 实跑（空目录 `/tmp/r16ws`）：`teamd --root /tmp/r16ws --port 8096` 起后快照
+  mission=default / agents=5 / active=default；HTTP 创建 research → 快照 mission=research、
+  4 成员、teams=[research]；demo 作业在 `teams/research/` 根完成（exit 0）。
+- JS 冒烟：`node tools/ui_smoke.js` ALL_OK（真实 fixture 与内置 fixture 双路径）。
+- 用户附图（wenote 链接）Round 15 不可达；本轮用户直接上传截图 + 给实机地址，均已纳入。
+
+**下一步（可选）**：任务级生命周期状态机；团队删除/归档/重命名；浅色/深色主题切换；
+DSH 适配（5 角色 agent preset）。
+
+---
+
+## Round 15（2026-09-18）—— 网页多团队（模板/自定义/切换）+ 按 DSH 风格重写 UI（修复「完全不可用」）
+
+**做了什么**
+
+1. **多团队模型（网页自主创建/切换）**：用户反馈「希望能在网页上自主选择创建不同团队，
+   提供团队模板 + 支持自定义团队」。
+   - `system/state/teams.json` 注册表：`{active, teams:[{team_id,name,template,roles,members,
+     root,created_at,created_by}]}`；工作区根自身 = 团队 `default`（向后兼容）。
+   - `teamctl.team_templates()`：software / documentation / research / general 四套模板；
+     `team_create()`（模板自动建角色与成员、默认自动激活）与 `team_switch()`；
+     `team_effective_root()` 解析命令作用根（注册表异常回退 default）。
+   - 作用域：普通命令/任务/作业作用于 **active 团队根**；`team_*` 作用于工作区根；
+     job 发起时快照团队根。`web_snapshot` 新增 `teams`/`workspace_root` 键；
+     `web_cmd` 白名单 + CLI `team` 子命令（templates/list/create/switch/root）。
+2. **修复「网页完全不可用」**：用户按快速开始启动后反馈网页不可用。根因：`web/index.html`
+   `render()` 内 `const badge` 重复声明（Round 14 加 attention 徽标引入）→ 整段 `<script>`
+   解析失败（SyntaxError），页面所有渲染/交互失效；此前测试只测 API 不测 JS。
+3. **UI 按 DeepSeek Harness 风格重写**（参考 DSH `design-platform.css` 暗色语义 token 与
+   三栏形态，本项目为侧栏+主区+底栏 composer 两栏）：暗色基底 `#151517`、层
+   `#232324/#2c2c2e/#353536`、半透明白边框、品牌 `#5686fe`、ok/warn/err
+   `#22c55e/#f59e0b/#f25a5a`；顶栏状态徽标（团队/使命/需关注/用量/审计）+ 侧栏团队创建/列表/
+   成员 + 页签主区 + 底部 composer/命令日志。
+4. **新增 JS 冒烟**：`node --check` + DOM-stub harness（document/fetch/EventSource 打桩，
+   真实 snapshot fixture）覆盖 render/show/loadTemplates/sendMsg/createTeam/switchTeam/
+   runLLM；getElementById id 与 HTML id 集合交叉核对。约定：改 index.html 必须先跑冒烟。
+
+**验证证据**
+
+- 全量回归：协议 29 + 成员 8 + 审计 9 + 演练 1 + 并行 2 + web 9 + teamd 6 + llm 3 =
+  **67/67 OK**（test_web 6→9：TestTeams 模板/创建/隔离/自定义校验；test_teamd 5→6：
+  HTTP 多团队链路；test_teamd 页面断言更新为 DSH 风格标题）。
+- 实跑（临时工作区 `teamd` 8095）：页面可达（新标题）；team_create research →
+  active=research + 4 成员；custom（writer/editor:内容编辑）`activate:false` 不抢活跃；
+  team_switch default → 使命 A 不变；demo 作业完成；子团队 audit 8/8（exit 0）。
+- JS 冒烟：`node --check` 通过；DOM-stub 全绿（sendMsg 参数、createTeam→team_create
+  template software、switchTeam→team_switch software、runLLM→kind=llm）。
+- 用户附图（wenote 分享链接）在本环境不可达（代理拒绝），改以 DSH 源码主题 token 为参考。
+
+**下一步（可选）**：任务级生命周期状态机；团队删除/归档/重命名；任务级 RBAC；
+DSH 适配（5 角色 agent preset）。
+
+---
+
 ## Round 14（2026-09-18）—— S5 实跑验收 ✅ + #5180 实践点落地 + 推送 GitHub
 
 **做了什么**（对应本轮指令「开发完跑一遍看是否符合 S5 目标…读完 #5180，有可行实践点就实现并验证，最后提交 GitHub 更新 README」）

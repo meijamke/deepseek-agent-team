@@ -41,6 +41,9 @@ SECURITY_HEADERS = (
      "connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'"),
 )
 
+# 多团队工作区：这些动作作用于工作区根（注册表），其余命令作用于 active 团队根。
+TEAM_ACTIONS = frozenset({"team_templates", "team_list", "team_create", "team_switch"})
+
 
 class TeamHandler(BaseHTTPRequestHandler):
     server_version = "teamd/0.1"
@@ -82,9 +85,10 @@ class TeamHandler(BaseHTTPRequestHandler):
             if path == "/":
                 self._serve_index()
             elif path == "/api/snapshot":
-                self._json(teamctl.web_snapshot(self.teamd["root"],
+                self._json(teamctl.web_snapshot(self._team_root(),
                                                 message_tail=self.teamd.get("message_tail", 10),
-                                                log_tail=self.teamd.get("log_tail", 5)))
+                                                log_tail=self.teamd.get("log_tail", 5),
+                                                workspace_root=self._ws_root()))
             elif path == "/api/jobs":
                 st = self.teamd["state"]
                 jobs = sorted(st["jobs"].values(), key=lambda j: j["job_id"])
@@ -122,6 +126,14 @@ class TeamHandler(BaseHTTPRequestHandler):
             with st["lock"]:
                 if q in st["clients"]:
                     st["clients"].remove(q)
+
+    def _ws_root(self):
+        """多团队工作区根（--root，注册表所在）。"""
+        return self.teamd["root"]
+
+    def _team_root(self):
+        """当前请求的命令作用根：active 团队（default=工作区根）。"""
+        return teamctl.team_effective_root(self._ws_root())
 
     def _serve_index(self):
         page = HERE / "index.html"
@@ -169,7 +181,8 @@ class TeamHandler(BaseHTTPRequestHandler):
             return
         action = body.get("action")
         params = body.get("params") or {}
-        res = teamctl.web_cmd(self.teamd["root"], action, params)
+        run_root = self._ws_root() if action in TEAM_ACTIONS else self._team_root()
+        res = teamctl.web_cmd(run_root, action, params)
         self._json(res)
 
     def _run(self):
@@ -201,7 +214,7 @@ class TeamHandler(BaseHTTPRequestHandler):
                "created_at": teamctl.now()}
         st["jobs"][job_id] = job
         self._publish({"type": "job", "job": dict(job)})
-        root = self.teamd["root"]
+        root = teamctl.team_effective_root(self.teamd["root"])  # 记录发起时的 active 团队
 
         def worker():
             job["status"] = "running"
@@ -238,7 +251,9 @@ class TeamHandler(BaseHTTPRequestHandler):
 
 
 def serve(root, host="127.0.0.1", port=8090, message_tail=10, log_tail=5, token=""):
-    teamctl.ensure(root)
+    # 免初始化引导：缺使命时按模板登记默认团队 + 每角色成员（clone → 启动 → 网页即用）
+    teamctl.ensure_console(root)
+    root = str(pathlib.Path(root).resolve())
     state = {"jobs": {}, "clients": [], "lock": threading.Lock(), "seq": 0}
     handler = type("BoundTeamHandler", (TeamHandler,), {"teamd": {
         "root": str(pathlib.Path(root).resolve()),

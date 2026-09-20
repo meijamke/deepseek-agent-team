@@ -31,14 +31,14 @@ DeepSeek Agent Team（`agent-team`）是**多 Agent 去中心化团队**的开�
 git clone https://github.com/meijamke/deepseek-agent-team.git
 cd deepseek-agent-team
 
-# 初始化一个使命（创建 5 角色成员）
-python3.10 tools/teamctl.py --root . mission init --mission A \
-    --title "使命A·初始" --roles spec architect dev qa ops
-python3.10 tools/teamctl.py --root . agent new --id spec --role spec   # 其余 4 角色同理
-
-# 启动网页控制台（S0–S5 全部能力）
+# 启动网页控制台（S0–S5 全部能力；缺使命时自动登记「默认团队」）
 python3.10 web/teamd.py --root . --port 8090    # 打开 http://127.0.0.1:8090/
 ```
+
+打开网页**即可直接使用，无需先初始化使命**：首次启动会自动把工作区根登记为「默认团队」
+（软件模板 spec/architect/dev/qa/ops 五名成员）；侧栏「创建团队」可选择模板（软件 / 文档 /
+研究 / 通用，自动建好成员并激活）或自定义角色，团队列表点击即切换——每个团队是独立工作区，
+互不干扰。若你已用 CLI 初始化过使命，`teamd` 不会重复引导。
 
 `teamd` 常用参数：`--host 0.0.0.0`（对外监听）、`--token <secret>`（写操作 / 作业需
 `X-Token`）、`--max-stale-hours 2`（「需关注」判定阈值）、`--real-llm`（成员接入真实 LLM）。
@@ -64,10 +64,11 @@ python3.10 tools/tests/test_member.py       # 成员执行（8 项）
 python3.10 tools/tests/test_audit.py        # 审计（9 项）
 python3.10 tools/tests/test_drill.py        # 故障演练（1 项）
 python3.10 tools/tests/test_parallel.py     # 并发（2 项）
-python3.10 tools/tests/test_web.py          # 关注点/路由等 web 能力（6 项）
-python3.10 tools/tests/test_teamd.py        # HTTP 管理端（5 项）
+python3.10 tools/tests/test_web.py          # 关注点/路由/多团队/免初始化引导等 web 能力（10 项）
+python3.10 tools/tests/test_teamd.py        # HTTP 管理端（7 项）
 python3.10 tools/tests/test_llm.py          # LLM 后端（3 项）
-# 全量 63/63 通过
+node tools/ui_smoke.js                      # 网页 JS 冒烟（DOM 打桩；可传真实 snapshot fixture）
+# 全量 69/69 通过
 ```
 
 ## 目录结构（四区域虚拟文件系统）

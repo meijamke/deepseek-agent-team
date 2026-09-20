@@ -66,13 +66,17 @@ class TestTeamdHttp(unittest.TestCase):
             try:
                 st, body = _get(base, "/")
                 self.assertEqual(st, 200)
-                self.assertIn("多 Agent 去中心化团队", body)
+                self.assertIn("<title>DeepSeek Agent Team · 控制台</title>", body)
+                self.assertIn("DeepSeek Agent Team", body)
+                self.assertIn("/api/snapshot", body)
                 st, body = _get(base, "/api/snapshot")
                 self.assertEqual(st, 200)
                 data = json.loads(body)
                 self.assertEqual(data["mission"]["mission"], "A")
                 self.assertEqual(len(data["agents"]), 3)
                 self.assertIn("attention", data)  # #5180 attention 聚合随快照下发
+                self.assertIn("teams", data)      # 多团队注册表随快照下发
+                self.assertEqual(data["teams"]["active"], "default")
                 # 与 CLI 直调一致（generated_at 除外）
                 cli = teamctl.web_snapshot(td)
                 data.pop("generated_at"); cli.pop("generated_at")
@@ -139,6 +143,47 @@ class TestTeamdHttp(unittest.TestCase):
                               {"action": "route_suggest", "params": {"goal": "实现订单并写测试"}})
                 self.assertTrue(r["ok"], r)
                 self.assertIn("dev", r["result"]["matched"])
+            finally:
+                httpd.shutdown()
+
+    def test_teams_via_http(self):
+        """多团队：网页创建模板团队 → 自动激活（snapshot 作用根=子团队）→ 切回默认。"""
+        with tempfile.TemporaryDirectory() as td:
+            _setup_small(td)
+            httpd, base = _start(td)
+            try:
+                st, r = _post(base, "/api/command", {"action": "team_list"})
+                self.assertEqual(st, 200)
+                self.assertTrue(r["ok"] and r["result"]["active"] == "default", r)
+                # 模板创建（研究分析团队，自动激活）
+                st, r = _post(base, "/api/command",
+                              {"action": "team_create", "params": {"template": "research"}})
+                self.assertEqual(st, 200)
+                self.assertTrue(r["ok"], r)
+                tid = r["result"]["team"]["team_id"]
+                # 快照现在指向子团队：使命=团队 id，成员=模板角色
+                st, body = _get(base, "/api/snapshot")
+                data = json.loads(body)
+                self.assertEqual(data["teams"]["active"], tid)
+                self.assertEqual(data["mission"]["mission"], tid)
+                self.assertEqual(sorted(a["agent_id"] for a in data["agents"]),
+                                 ["analyst", "critic", "researcher", "summarizer"])
+                # 普通命令作用于新团队（隔离验证：默认团队的 t9 任务不可见）
+                st, r = _post(base, "/api/command",
+                              {"action": "task_new", "params": {"task_id": "t-tm",
+                                                                "goal": "团队任务"}})
+                self.assertTrue(r["ok"], r)
+                st, body = _get(base, "/api/snapshot")
+                self.assertEqual(json.loads(body)["tasks"][0]["task_id"], "t-tm")
+                # 切回默认团队：使命 A、任务恢复为默认团队内容
+                st, r = _post(base, "/api/command",
+                              {"action": "team_switch", "params": {"team": "default"}})
+                self.assertTrue(r["ok"] and r["result"]["active"] == "default", r)
+                st, body = _get(base, "/api/snapshot")
+                data = json.loads(body)
+                self.assertEqual(data["mission"]["mission"], "A")
+                self.assertEqual(len(data["agents"]), 3)
+                self.assertEqual([t["task_id"] for t in data["tasks"]], [])
             finally:
                 httpd.shutdown()
 
@@ -221,6 +266,35 @@ class TestTeamdHttp(unittest.TestCase):
                 self.assertTrue((out_dir / "recap.json").exists())
                 t.join(timeout=5)
                 self.assertTrue(any(e.get("type") == "job" for e in ev_received))
+            finally:
+                httpd.shutdown()
+
+    def test_bare_start_bootstrap(self):
+        """快速开始（免初始化）：空目录 → 引导默认团队 → 网页直接可用 → 页面建团队。"""
+        with tempfile.TemporaryDirectory() as td:
+            # 模拟 teamd.serve() 的启动引导（不先 init 使命）
+            boot = teamctl.ensure_console(td)
+            self.assertTrue(boot["bootstrapped"])
+            httpd, base = _start(td)
+            try:
+                st, body = _get(base, "/")
+                self.assertEqual(st, 200)
+                st, body = _get(base, "/api/snapshot")
+                self.assertEqual(st, 200)
+                data = json.loads(body)
+                self.assertEqual(data["mission"]["mission"], "default")
+                self.assertEqual(len(data["agents"]), 5)
+                self.assertEqual(data["teams"]["active"], "default")
+                # 页面上直接创建并切换团队
+                st, r = _post(base, "/api/command",
+                              {"action": "team_create", "params": {"template": "documentation"}})
+                self.assertEqual(st, 200)
+                self.assertTrue(r["ok"], r)
+                st, body = _get(base, "/api/snapshot")
+                data = json.loads(body)
+                self.assertEqual(data["mission"]["mission"], "documentation")
+                self.assertEqual(len(data["agents"]), 4)
+                self.assertEqual(data["teams"]["active"], "documentation")
             finally:
                 httpd.shutdown()
 

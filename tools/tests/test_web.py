@@ -5,6 +5,7 @@
 运行：python3.10 tools/tests/test_web.py
 """
 import pathlib
+import re
 import sys
 import tempfile
 import unittest
@@ -36,10 +37,12 @@ class TestWebSnapshot(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             _setup_ws(td)
             s = teamctl.web_snapshot(td)
-            for k in ("generated_at", "root", "mission", "agents", "tasks", "messages",
-                      "handoffs", "conflicts", "usage", "quotas", "logs", "audit",
-                      "eval_runs", "deliverables", "attention"):
+            for k in ("generated_at", "root", "workspace_root", "teams", "mission", "agents",
+                      "tasks", "messages", "handoffs", "conflicts", "usage", "quotas", "logs",
+                      "audit", "eval_runs", "deliverables", "attention"):
                 self.assertIn(k, s)
+            self.assertEqual(s["workspace_root"], str(pathlib.Path(td).resolve()))
+            self.assertEqual(s["teams"]["active"], "default")
             self.assertEqual(s["mission"]["mission"], "A")
             by_id = {a["agent_id"]: a for a in s["agents"]}
             self.assertEqual(sorted(by_id), ["dev", "ops", "qa", "spec"])
@@ -154,6 +157,110 @@ class TestMissionSwitchWeb(unittest.TestCase):
             snap = teamctl.web_snapshot(td)
             self.assertEqual(snap["mission"]["revision"], 2)
             self.assertEqual(snap["mission_history"][-1]["mission"], "A")
+
+
+class TestTeams(unittest.TestCase):
+    """多团队工作区：模板/自定义创建、自动激活、切换、隔离与校验（网页/CLI 共用）。"""
+
+    def _default_ws(self, td):
+        teamctl.mission_init(td, "A", "默认团队", ["spec", "dev", "qa"])
+        for r in ("spec", "dev", "qa"):
+            teamctl.agent_new(td, r, role=r)
+
+    def test_templates_and_initial_registry(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._default_ws(td)
+            s = teamctl.web_snapshot(td)
+            self.assertEqual(s["teams"]["active"], "default")
+            self.assertEqual(s["teams"]["teams"], [])
+            tpl = {t["id"]: t for t in teamctl.team_templates()}
+            self.assertEqual(tpl["software"]["roles"],
+                             ["spec", "architect", "dev", "qa", "ops"])
+            self.assertIn("documentation", tpl)
+            self.assertIn("research", tpl)
+            self.assertIn("general", tpl)
+
+    def test_create_template_autocreate_and_switch(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._default_ws(td)
+            r = teamctl.web_cmd(td, "team_create", {"template": "documentation"})
+            self.assertTrue(r["ok"], r)
+            res = r["result"]
+            tid = res["team"]["team_id"]
+            self.assertEqual(tid, "documentation")  # 模板 id 作团队 id
+            self.assertEqual(res["team"]["roles"],
+                             ["writer", "editor", "reviewer", "publisher"])
+            self.assertEqual(res["active"], tid)     # 创建后自动激活
+            troot = teamctl.team_effective_root(td)
+            self.assertEqual(str(pathlib.Path(troot)).endswith("teams/" + tid), True)
+            self.assertEqual(teamctl.mission_get(troot)["mission"], tid)  # 使命=团队
+            self.assertEqual(sorted(a["agent_id"] for a in teamctl.agent_list(troot)),
+                             ["editor", "publisher", "reviewer", "writer"])
+            # 默认团队工作区不受影响（隔离）
+            self.assertEqual(teamctl.mission_get(td)["mission"], "A")
+            # 快照（teamd 语义：团队根 + 工作区根）携带团队注册表
+            snap = teamctl.web_snapshot(troot, workspace_root=td)
+            self.assertEqual(snap["teams"]["active"], tid)
+            self.assertEqual(snap["workspace_root"], str(pathlib.Path(td).resolve()))
+            self.assertEqual(snap["mission"]["mission"], tid)
+            # 切回默认
+            r2 = teamctl.web_cmd(td, "team_switch", {"team": "default"})
+            self.assertTrue(r2["ok"], r2)
+            self.assertEqual(r2["result"]["active"], "default")
+            self.assertEqual(teamctl.team_effective_root(td), str(pathlib.Path(td).resolve()))
+            self.assertEqual(teamctl.mission_get(td)["mission"], "A")
+            # 再切回子团队
+            self.assertTrue(teamctl.web_cmd(td, "team_switch", {"team": tid})["ok"])
+            self.assertEqual(teamctl.mission_get(teamctl.team_effective_root(td))["mission"], tid)
+
+    def test_custom_roles_and_validation(self):
+        with tempfile.TemporaryDirectory() as td:
+            r = teamctl.web_cmd(td, "team_create", {"template": "custom",
+                                                    "roles": ["writer", "editor:内容编辑",
+                                                              "reviewer", "writer"]})
+            self.assertFalse(r["ok"])  # 重复角色被拒
+            r = teamctl.web_cmd(td, "team_create", {"template": "custom",
+                                                    "roles": ["writer", "editor:内容编辑",
+                                                              "reviewer"]})
+            self.assertTrue(r["ok"], r)
+            tid = r["result"]["team"]["team_id"]
+            self.assertTrue(re.match(r"^[a-z][a-z0-9-]*$", tid))
+            troot = teamctl.team_effective_root(td)
+            cards = {a["agent_id"]: a for a in teamctl.agent_list(troot)}
+            self.assertEqual(cards["editor"]["name"], "内容编辑")
+            # 显式 id 冲突 / 保留 id / 未知模板 / 非法角色 id
+            self.assertFalse(teamctl.web_cmd(td, "team_create",
+                                             {"team_id": tid, "roles": ["x"]})["ok"])
+            self.assertFalse(teamctl.web_cmd(td, "team_create",
+                                             {"team_id": "default", "roles": ["x"]})["ok"])
+            self.assertFalse(teamctl.web_cmd(td, "team_create",
+                                             {"template": "nope", "roles": ["x"]})["ok"])
+            self.assertFalse(teamctl.web_cmd(td, "team_create",
+                                             {"roles": ["Bad Role"]})["ok"])
+            # 切换不存在的团队被拒
+            self.assertFalse(teamctl.web_cmd(td, "team_switch", {"team": "ghost"})["ok"])
+
+    def test_ensure_console_bootstrap_idempotent(self):
+        with tempfile.TemporaryDirectory() as td:
+            # 免初始化：未登记使命 → 默认团队（software 模板 5 角色 + 成员卡）
+            b1 = teamctl.ensure_console(td)
+            self.assertTrue(b1["bootstrapped"], b1)
+            self.assertEqual(b1["mission"]["mission"], "default")
+            self.assertEqual(b1["mission"]["roles"], ["spec", "architect", "dev", "qa", "ops"])
+            self.assertEqual(len(b1["agents"]), 5)
+            self.assertEqual(b1["registry"]["active"], "default")
+            # 幂等：再调不重复建成员、不覆盖
+            b2 = teamctl.ensure_console(td)
+            self.assertFalse(b2["bootstrapped"])
+            self.assertEqual(len(b2["agents"]), 5)
+            self.assertEqual(len(teamctl.agent_list(td)), 5)
+            # 已有其他使命 → 不引导、不覆盖
+            with tempfile.TemporaryDirectory() as td2:
+                teamctl.mission_init(td2, "A", "现有使命", ["spec", "dev"])
+                b3 = teamctl.ensure_console(td2)
+                self.assertFalse(b3["bootstrapped"])
+                self.assertEqual(b3["mission"]["mission"], "A")
+                self.assertEqual(teamctl.agent_list(td2), [])
 
 
 if __name__ == "__main__":

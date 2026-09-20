@@ -767,13 +767,16 @@ def route_suggest(root, goal):
             "note": "建议角色命中关键词；无 Manager，仅为参考，成员自主决定"}
 
 
-def web_snapshot(root, message_tail=10, log_tail=5):
-    """只读聚合快照：成员/任务/消息/移交/配额/用量/冲突/审计/使命/评测/交付物。
+def web_snapshot(root, message_tail=10, log_tail=5, workspace_root=None):
+    """只读聚合快照：成员/任务/消息/移交/配额/用量/冲突/审计/使命/评测/交付物/团队。
 
     - 只做读操作；审计通过 audit.audit()（亦是只读）计算。
+    - root 为当前（active）团队根；workspace_root 为多团队工作区根（缺省=root，
+      用于纯单工作区调用），团队注册表从 workspace_root 读取。
     - 返回结构为 JSON 序列化对象（无 pathlib/内部对象），可直接 HTTP 输出。
     """
     p = ensure(root)
+    ws = workspace_root or root
     agents = []
     for card in agent_list(root):
         aid = card.get("agent_id")
@@ -834,6 +837,8 @@ def web_snapshot(root, message_tail=10, log_tail=5):
     return {
         "generated_at": now(),
         "root": str(p["root"]),
+        "workspace_root": str(pathlib.Path(ws).resolve()),
+        "teams": team_list(ws),
         "mission": mission_get(root),
         "mission_history": _mission_history(root),
         "agents": agents,
@@ -996,6 +1001,185 @@ def mission_apply(root, params):
             "failing_checks": _audit_failing(rep)}
 
 
+# ---------------------------------------------------------------- 团队（多团队工作区：模板/自定义 + 切换）
+#
+# 「团队」＝独立成员/任务/证据工作区：teams/<team_id>/ 下是一套完整的虚拟文件系统
+# （agents/ shared/ system/ …），彼此隔离。工作区根目录自身也是团队（team_id="default"，
+# 向后兼容）。注册表 <workspace>/system/state/teams.json：{active, teams:[...]}。
+# 普通命令作用于 active 团队根（team_effective_root）；团队管理动作作用于工作区根。
+# 对齐「网页自主选择创建不同团队」：模板（预置角色表）+ 自定义（任意合法角色表）。
+
+TEAM_TEMPLATES = [
+    {"id": "software", "name": "软件开发团队",
+     "description": "需求 → 架构 → 开发 → 测试 → 运维（默认 5 角色）",
+     "roles": ["spec", "architect", "dev", "qa", "ops"]},
+    {"id": "documentation", "name": "文档创作团队",
+     "description": "写作 → 编辑 → 审核 → 发布",
+     "roles": ["writer", "editor", "reviewer", "publisher"]},
+    {"id": "research", "name": "研究分析团队",
+     "description": "调研 → 分析 → 批判 → 沉淀",
+     "roles": ["researcher", "analyst", "critic", "summarizer"]},
+    {"id": "general", "name": "通用协作团队",
+     "description": "规划 → 执行 → 复核（最小三人）",
+     "roles": ["planner", "executor", "reviewer"]},
+]
+
+
+def _teams_registry_path(root):
+    return ensure(root)["quotas"].parent / "teams.json"
+
+
+def _read_teams_registry(root):
+    return _read_json(_teams_registry_path(root), {"active": "default", "teams": []})
+
+
+def team_templates():
+    """模板清单（静态只读）：{id,name,description,roles}。模板角色可在此基础上自定义增删。"""
+    return [dict(t) for t in TEAM_TEMPLATES]
+
+
+def team_list(root):
+    """团队注册表（只读）：{active, teams:[{team_id,name,template,roles,members,root,...}]}。"""
+    reg = _read_teams_registry(root)
+    return {"active": reg.get("active", "default"), "teams": reg.get("teams", [])}
+
+
+def team_effective_root(root):
+    """命令作用根：active 团队（"default"=工作区根）。注册表缺失/异常时回退 default（安全优先，不丢失视图）。"""
+    ws = pathlib.Path(root).resolve()
+    reg = _read_teams_registry(str(ws))
+    active = reg.get("active", "default")
+    if active != "default":
+        for t in reg.get("teams", []):
+            if t.get("team_id") == active:
+                return str((ws / t.get("root", "teams/" + active)).resolve())
+    return str(ws)
+
+
+def _parse_team_roles(roles):
+    """roles: ["id"] 或 ["id:显示名"]（也可传 {"id","name"} 字典）→ [{"id","name"}]。
+    id 必须匹配 [a-z][a-z0-9-]*（与 agent_new 同规则），去重校验。"""
+    if not isinstance(roles, list) or not roles:
+        raise SchemaError("roles must be a non-empty list")
+    out, seen = [], set()
+    for item in roles:
+        if isinstance(item, dict):
+            rid = str(item.get("id", "")).strip()
+            nm = str(item.get("name", "")).strip() or None
+        else:
+            parts = str(item).split(":", 1)
+            rid = parts[0].strip()
+            nm = (parts[1].strip() or None) if len(parts) > 1 else None
+        if not re.match(r"^[a-z][a-z0-9-]*$", rid):
+            raise SchemaError("invalid role id %r (must match [a-z][a-z0-9-]*)" % rid)
+        if rid in seen:
+            raise SchemaError("duplicate role %r" % rid)
+        seen.add(rid)
+        out.append({"id": rid, "name": nm or rid})
+    return out
+
+
+def _next_team_id(reg, base):
+    """团队目录 id：以名称/template slug 为基；冲突则追加 -N；空则 team-N 递增。"""
+    base = (base or "").strip()
+    slug = re.sub(r"[^a-z0-9]+", "-", base.lower()).strip("-") if base else ""
+    if not slug:
+        slug = "team"
+    taken = {t.get("team_id") for t in reg.get("teams", [])}
+    if slug not in taken:
+        return slug
+    n = 2
+    while "%s-%d" % (slug, n) in taken:
+        n += 1
+    return "%s-%d" % (slug, n)
+
+
+def team_create(root, team_id=None, name=None, template=None, roles=None,
+                activate=True, by="operator"):
+    """创建团队：teams/<team_id>/ 完整工作区 + 使命登记（revision 1）+ 每个角色一张成员卡。
+    template ∈ TEAM_TEMPLATES id 或 "custom"/None；roles 用于自定义（项 "id" 或 "id:显示名"）。
+    默认自动激活（activate=True）——创建后命令立即作用于新团队。"""
+    ws = pathlib.Path(root).resolve()
+    reg = _read_teams_registry(str(ws))
+    if template and template != "custom":
+        tpl = next((t for t in TEAM_TEMPLATES if t["id"] == template), None)
+        if tpl is None:
+            raise SchemaError("unknown template %r (templates: %s)"
+                              % (template, ",".join(t["id"] for t in TEAM_TEMPLATES)))
+        roles = roles or list(tpl["roles"])
+        name = name or tpl["name"]
+    parsed = _parse_team_roles(roles)
+    team_id = (team_id or "").strip()
+    if not team_id:
+        base = template if (template and template != "custom") else name
+        team_id = _next_team_id(reg, base)
+    if not re.match(r"^[a-z][a-z0-9-]*$", team_id):
+        raise SchemaError("team_id must match [a-z][a-z0-9-]*")
+    if team_id == "default":
+        raise SchemaError("team_id 'default' is reserved (workspace root team)")
+    if any(t.get("team_id") == team_id for t in reg.get("teams", [])):
+        raise SchemaError("team %r already exists" % team_id)
+    troot = ws / "teams" / team_id
+    ensure(str(troot))
+    mission_init(str(troot), team_id, name or team_id, [r["id"] for r in parsed], revision=1)
+    members = []
+    for r in parsed:
+        agent_new(str(troot), r["id"], name=r["name"], role=r["id"],
+                  description="%s 团队成员（%s）" % (name or team_id, r["id"]))
+        members.append(r["id"])
+    rec = {"team_id": team_id, "name": name or team_id,
+           "template": template or "custom", "roles": [r["id"] for r in parsed],
+           "members": members, "root": "teams/" + team_id,
+           "created_at": now(), "created_by": by}
+    reg.setdefault("teams", []).append(rec)
+    if activate:
+        reg["active"] = team_id
+    _write_json(_teams_registry_path(str(ws)), reg)
+    return {"team": rec, "active": reg.get("active"), "registry": team_list(str(ws))}
+
+
+def team_switch(root, team_id, by="operator"):
+    """切换当前团队（"default"=工作区根团队；其余须已创建）。返回最新注册表。"""
+    ws = pathlib.Path(root).resolve()
+    reg = _read_teams_registry(str(ws))
+    team_id = (team_id or "").strip()
+    if team_id != "default" and not any(t.get("team_id") == team_id for t in reg.get("teams", [])):
+        raise SchemaError("no such team %r (use team_list)" % team_id)
+    reg["active"] = team_id
+    _write_json(_teams_registry_path(str(ws)), reg)
+    return team_list(str(ws))
+
+
+def ensure_console(root, name="默认团队", template="software", by="operator"):
+    """网页「免初始化」启动引导：clone → teamd → 打开网页即可工作（无需先 CLI 建使命）。
+
+    - 已登记使命 → 原样返回（幂等，绝不重复建成员/覆盖现有使命）。
+    - 未登记 → 在工作区根（default 团队）登记 template 默认使命 + 每角色一张成员卡，
+      语义与网页「创建团队」一致（不含注册表条目——default 即工作区根）。
+    返回 {"bootstrapped": bool, "mission": dict|None, "agents": [id], "registry": team_list(...)}。
+    """
+    ws = pathlib.Path(root).resolve()
+    p = ensure(str(ws))
+    mission_file = p["state"] / "mission.json"
+    if mission_file.exists():
+        return {"bootstrapped": False,
+                "mission": mission_get(str(ws)),
+                "agents": [c.get("agent_id") for c in agent_list(str(ws))],
+                "registry": team_list(str(ws))}
+    tpl = next((t for t in TEAM_TEMPLATES if t["id"] == template), None)
+    if tpl is None:
+        raise SchemaError("unknown template %r" % template)
+    roles = list(tpl["roles"])
+    mission_init(str(ws), "default", name, roles, revision=1)
+    for r in roles:
+        agent_new(str(ws), r, name=r, role=r,
+                  description="%s（默认团队，%s 模板）" % (name, tpl["name"]))
+    return {"bootstrapped": True,
+            "mission": mission_get(str(ws)),
+            "agents": [c.get("agent_id") for c in agent_list(str(ws))],
+            "registry": team_list(str(ws))}
+
+
 def web_cmd(root, action, params=None):
     """受控命令层。返回 {"ok": bool, "result": ...} 或 {"ok": False, "error": ...}。
     仅动作白名单可执行；promote 先 dry-run (promote_check) 由人工确认证据后再执行。"""
@@ -1054,9 +1238,24 @@ def web_cmd(root, action, params=None):
             return {"ok": True, "result": mission_apply(root, params)}
         if action == "route_suggest":
             return {"ok": True, "result": route_suggest(root, params.get("goal", ""))}
+        if action == "team_templates":
+            return {"ok": True, "result": {"templates": team_templates()}}
+        if action == "team_list":
+            return {"ok": True, "result": team_list(root)}
+        if action == "team_create":
+            return {"ok": True, "result": team_create(
+                root, params.get("team_id"), params.get("name"), params.get("template"),
+                params.get("roles"), bool(params.get("activate", True)),
+                params.get("by", "operator"))}
+        if action == "team_switch":
+            if not params.get("team"):
+                raise ValueError("team_switch needs team")
+            return {"ok": True, "result": team_switch(root, params["team"],
+                                                      params.get("by", "operator"))}
         return {"ok": False, "error": "unknown action %r (whitelist: %s)"
                 % (action, "snapshot/task_new/send/status_set/promote_check/promote/audit/probe/"
-                           "run_demo/run_llm/mission_switch_dry/mission_apply/route_suggest")}
+                           "run_demo/run_llm/mission_switch_dry/mission_apply/route_suggest/"
+                           "team_templates/team_list/team_create/team_switch")}
     except (SchemaError, ValueError, KeyError, json.JSONDecodeError, FileNotFoundError) as e:
         return {"ok": False, "error": "%s: %s" % (type(e).__name__, e)}
 
@@ -1248,6 +1447,20 @@ def _cli():
     a.add_argument("--roles", nargs="*", required=True)
     b = ss.add_parser("get")
 
+    s = sp("team", "团队管理（模板/自定义创建 + 切换；普通命令作用于 active 团队）")
+    ss = s.add_subparsers(dest="sub", required=True)
+    ss.add_parser("templates", help="列出团队模板")
+    ss.add_parser("list", help="团队注册表（active + 列表）")
+    a = ss.add_parser("create", help="创建团队（模板或自定义），默认自动激活")
+    a.add_argument("--template", default=None, help="模板 id（software/documentation/research/general）")
+    a.add_argument("--team", dest="team_id", default=None, help="团队 id（默认按名称生成 slug）")
+    a.add_argument("--name", default=None)
+    a.add_argument("--roles", nargs="*", default=[], help="自定义角色：id 或 id:显示名")
+    a.add_argument("--no-activate", action="store_true", help="创建后不切换为当前团队")
+    a = ss.add_parser("switch")
+    a.add_argument("--team", required=True, help="目标团队 id（default=工作区根团队）")
+    a = ss.add_parser("root", help="打印 active 团队的命令作用根")
+
     s = sp("web", "网页控制台数据契约（S0+：snapshot 只读；命令类见 web command）")
     ss = s.add_subparsers(dest="sub", required=True)
     a = ss.add_parser("snapshot", help="只读聚合快照（零副作用）")
@@ -1360,6 +1573,19 @@ def _cli():
                           file=sys.stderr)
                     sys.exit(2)
                 print(json.dumps(r, ensure_ascii=False, indent=2))
+        elif args.cmd == "team":
+            if args.sub == "templates":
+                print(json.dumps(team_templates(), ensure_ascii=False, indent=2))
+            elif args.sub == "list":
+                print(json.dumps(team_list(root), ensure_ascii=False, indent=2))
+            elif args.sub == "create":
+                print(json.dumps(team_create(root, args.team_id, args.name, args.template,
+                                             args.roles, not args.no_activate),
+                                 ensure_ascii=False, indent=2))
+            elif args.sub == "switch":
+                print(json.dumps(team_switch(root, args.team), ensure_ascii=False, indent=2))
+            else:
+                print(team_effective_root(root))
         elif args.cmd == "web":
             if args.sub == "snapshot":
                 print(json.dumps(web_snapshot(root, args.message_tail, args.log_tail),

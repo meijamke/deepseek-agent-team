@@ -36,14 +36,18 @@ Before running, read [web/README.md](web/README.md) (deployment / security) and
 git clone https://github.com/meijamke/deepseek-agent-team.git
 cd deepseek-agent-team
 
-# Initialize a mission (creates the 5 role members)
-python3.10 tools/teamctl.py --root . mission init --mission A \
-    --title "Mission A · initial" --roles spec architect dev qa ops
-python3.10 tools/teamctl.py --root . agent new --id spec --role spec   # same for the other 4 roles
-
-# Start the web console (all S0–S5 capabilities)
+# Start the web console (all S0–S5 capabilities; a missing mission is
+# bootstrapped automatically as the "default team")
 python3.10 web/teamd.py --root . --port 8090    # open http://127.0.0.1:8090/
 ```
+
+The page is **usable immediately — no manual mission init required**: on first start the
+workspace root is registered as the "default team" (software template:
+spec/architect/dev/qa/ops — five members). In the sidebar you can **create teams**
+from templates (software / documentation / research / general — members are created and
+the team is activated automatically) or with custom roles, and switch the active team
+with one click — each team is an isolated workspace. If you already initialized a
+mission via the CLI, `teamd` will not bootstrap again.
 
 Useful `teamd` flags: `--host 0.0.0.0` (listen externally), `--token <secret>` (writes /
 jobs require `X-Token`), `--max-stale-hours 2` (attention threshold), `--real-llm` (members
@@ -69,10 +73,11 @@ python3.10 tools/tests/test_member.py       # member execution (8)
 python3.10 tools/tests/test_audit.py        # audit (9)
 python3.10 tools/tests/test_drill.py        # failure drill (1)
 python3.10 tools/tests/test_parallel.py     # concurrency (2)
-python3.10 tools/tests/test_web.py          # web capabilities (6)
-python3.10 tools/tests/test_teamd.py        # HTTP admin server (5)
+python3.10 tools/tests/test_web.py          # web capabilities / multi-team / bootstrap (10)
+python3.10 tools/tests/test_teamd.py        # HTTP admin server (7)
 python3.10 tools/tests/test_llm.py          # LLM backend (3)
-# full suite: 63/63 passing
+node tools/ui_smoke.js                      # JS smoke (DOM stub; optional real fixture arg)
+# full suite: 69/69 passing
 ```
 
 ## Directory layout (four-zone virtual filesystem)
