@@ -1,0 +1,8 @@
+# @meijamke/dsh-team-room — profile bundle patch
+#
+# 使 `dsh plugin add ./plugins/team-room` 能自动把插件行接入 profile 组合。
+# 行 ID 与包名同名;Host 侧入口是包的 main(host.js),Browser 侧由
+# package.json 的 dsh.client 声明 + exports["./client"] 自动被发现。
+- insert:
+    - id: team-room
+      name: '@meijamke/dsh-team-room'

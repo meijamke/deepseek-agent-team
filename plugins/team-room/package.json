@@ -1,0 +1,32 @@
+{
+  "name": "@meijamke/dsh-team-room",
+  "version": "0.1.0",
+  "description": "人×多 Agent 对等沟通墙:Dynamic 团队沟通视图(成员状态/消息流/任务板/直接发送),可作为 dsh profile 插件热插拔",
+  "type": "module",
+  "main": "./host.js",
+  "exports": {
+    ".": "./host.js",
+    "./client": "./client.bundle.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "build:client": "node scripts/build.mjs"
+  },
+  "files": [
+    "host.js",
+    "client.bundle.js",
+    "cordis.patch.yml",
+    "scripts/build.mjs",
+    "client.src.js",
+    "README.md"
+  ],
+  "license": "MIT"
+}
