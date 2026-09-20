@@ -24,5 +24,12 @@
       "qa"
     ],
     "updated_at": "2026-09-14T10:55:31.267994+00:00"
+  },
+  "t-r14-accept": {
+    "task_id": "t-r14-accept",
+    "goal": "S5 验收：网页重放完整链路",
+    "visited": [],
+    "updated_at": "2026-09-18T09:52:37.109996+00:00",
+    "created_by": "operator"
   }
 }

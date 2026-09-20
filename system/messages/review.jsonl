@@ -1,0 +1,1 @@
+{"envelope_version": 1, "id": "44947d8048964ee7", "ts": "2026-09-18T09:53:34.214862+00:00", "sender_id": "qa", "type": "review_result", "payload": {"verdict": "pass", "method": "verify", "evidence": "r14-e1"}, "topic": "review", "task_id": "t-r14-accept"}

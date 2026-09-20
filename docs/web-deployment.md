@@ -120,3 +120,37 @@ task ↔ Session，member ↔ 子代理，人工干预点 ↔ Approval。
 - [x] S5 `teamd` 独立部署（`--root/--host/--port/--token` + 安全头 + 部署文档）
 - [ ] （可选）DSH 适配：5 角色 agent preset 作为成员（不改协议层，仅加适配层）
 - [ ] （可选）读取端点鉴权（如反向代理 Basic Auth）与 WebSocket 推送替代轮询+SSE
+
+## 7. 来自 DSH discussion #5180 的实践点（Round 14 实跑后提炼落地）
+
+> 来源：[deepseek-harness discussion #5180](https://github.com/deepseek-ai/deepseek-harness/discussions/5180)
+> 「App Plugin for DeepSeek Harness：一种同时面向人和 Agent 的插件形态」+ 社区回复
+> （YiHe：问题自动路由到领域包）。核心主张：**权威状态 = 有严格 Schema 的领域对象**、
+> **Agent 走封闭 action（业务语义+权限边界）**、**effect 需 revision 相关性校验（迟到结果拒绝）**、
+> **人与 Agent 共用同一 validator**、**长任务状态作为持续对象呈现（preparing/running/attention/completed/failed）**。
+
+| #5180 实践点 | 本项目对应 | 状态 |
+|---|---|---|
+| 权威状态不是聊天文本/流式输出，而是有 Schema 的对象 | 信封/移交/成员卡均 JSON Schema 校验；进度 JSONL 只作展示流，权威状态 = status 文件 + 发布物（promote 后） | 已有 |
+| Agent 只能调用封闭 action（不允许 DOM 级自动化） | `web_cmd` 白名单 + member OPS 集合 + `_check_fs_scope`/`_check_write` | 已有 |
+| effect 相关性：client/request/sequence/base revision 全部匹配才接受，迟到结果拒绝 | 乐观锁 CAS（expected_version + `_check_write` 版本校验）；被拒的过期写进入 `system/state/conflicts/` | 已有（Round 14 起在 attention 中置顶展示） |
+| 人与 Agent 用同一套 validator | CLI 与网页均调用同一 teamctl 函数（等价性有测试：snapshot CLI=HTTP；web 命令=CLI 效果） | 已有 |
+| 长任务需要人介入时，把状态作为**持续对象**呈现，并给出 **attention** 状态 | **新增 `attention_items()`**：status=needs_input/failed、陈旧 running（无心跳超阈值）、并发冲突、审计未通过、配额耗尽 → 收敛为决策清单，随 `web_snapshot.attention` 下发；网页新增「需关注」面板 + 头部徽标（high 标红） | ✅ Round 14 |
+| 领域路由：问题自动路由到领域包（YiHe） | **新增 `route_suggest(goal)`**：关键词→角色命中→参考协作链；保持**无 Manager**——只给建议不强制（返回值注明）；`web_cmd` 白名单 + 网页「路由建议」卡片 | ✅ Round 14 |
+| 人工确认前必须看到审计/验证后果 | `mission_switch_dry/apply` 结果新增 `audit_ok` + `failing_checks`（沙盒/真实审计后果），网页命令日志显示「审计通过/未通过[…]」 | ✅ Round 14 |
+| 受控 effect/artifact 协议（staging→发布，只增不改） | `fs_promote` 门禁（qa/ops + evidence 背书 + staging 保留） | 已有 |
+| App identity / 独立窗口 / 桌面生命周期 | 本项目形态 = 独立 `teamd` 进程 + 单页控制台（浏览器），无桌面窗口需求 | 不适用（已说明） |
+| App-scoped Workspace / 每个插件一套 Session | `teamd --root` 即 App-scoped；作业=进程内存态 + 证据落盘（`eval/run/`） | 已有（文档见 web/README.md §5） |
+
+**Round 14 实跑发现的返工项（已修复）**
+
+1. `promote_check` 预检只看证据 + 守门角色，**不看产物是否存在** → 人工批准后才发现
+   promote 失败。修复：预检门禁加入 `artifact_exists`（gate_ok 全部满足才放行），
+   测试覆盖「证据在、产物缺 → gate False」「产物齐 → gate True」。
+2. `mission_switch_dry` 沙盒拷贝**排除 eval/** → 审计 `evidence_gated` 引用
+   `eval/tasks/*.json` 出现与换挡无关的**假阳性**，会误导人工判断。修复：沙盒保留
+   eval/（只增不改证据目录拷贝后审计差分=换挡本身），实测 failing 仅剩 `card_role_known`。
+
+**未落地（可选后续）**：任务级生命周期状态机（preparing/running/completed 的独立
+task 状态字段，而非仅 attention 派生）；effect 相关性 ID（client/request/sequence per
+action）；每插件 App-scoped Workspace（本项目为整队单 root）。

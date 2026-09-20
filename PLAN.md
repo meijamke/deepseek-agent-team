@@ -4,7 +4,7 @@
 > 核心公式：**Agent = LLM + 上下文 + 工具**（大脑 + 眼睛 + 手脚）
 > 版本：v0.1 · 2026-09 · 状态：规划（待确认团队使命后进入执行）
 >
-> **执行状态（2026-09-18 · Round 13）**：使命 **A（软件开发团队）已定稿冻结**（[docs/roles.md](docs/roles.md)）；M0–M7、P3、D1–D8 全部核验 ✅；M8 已启动（5 成员 + 配额 + 涌现日志）。**Round 13：网页部署 S0→S5 全落地** —— 团队「用起来」闭环可用：`web/teamd.py`（纯标准库 HTTP+SSE 运行时，脱离 DSH 独立）+ `web/index.html`（单文件控制台）+ `web/README.md`（部署/安全文档）。S0 只读控制台（`teamctl.web_snapshot` 零副作用聚合）→ S1 受控命令（`web_cmd` 白名单 + `--token` 鉴权）→ S2 成员执行（`kind=demo` 完整 5 角色链 + 作业队列 + SSE）→ S3 真实 LLM（`OpenAICompatLLM` 兼容端点 + 真实用量计量 + `source_tag=real:openai-compat` 诚实标注）→ S4 使命/安全面板（沙盒预演 + 确认切换 + 审计/探针）→ S5 独立部署加固（CSP/安全头/api_key 脱敏/文档）。**测试 62/62 OK；audit 8/8 pass；probe 3/3 pass**；live `http://127.0.0.1:8090/`；已推送 GitHub（`meijamke/deepseek-agent-team`，私有）。
+> **执行状态（2026-09-18 · Round 14）**：在前一轮基础上完成 **S5 实跑验收**（真实工作区 `teamd` 8090：S1 任务 t-r14-accept → S2 demo 作业 job-000001 五成员 done（`eval/run/2026-09-18-web-demo-02`）→ S3 real:openai-compat 真实 LLM 接入（`/api/jobs` 无 api_key，usage 30/2）→ S4 使命换挡 dry+apply（revision 2，审计后果返回）→ S5 令牌 401/200 + 60/60 并发 + 并发后审计通过；promote 人工门禁闭环发布 r14-accept.md；audit 8/8、probe 3/3）并**据此返工修复两处缺陷**（promote_check 缺 artifact_exists 门禁；mission_switch_dry 沙盒保留 eval/ 消除 evidence_gated 假阳性）。**Round 14 追加**：阅读 [DSH #5180](https://github.com/deepseek-ai/deepseek-harness/discussions/5180) 落地可行实践点——`attention_items()`（需关注聚合，网页「需关注」面板+徽标）、`route_suggest()`（无 Manager 的领域路由建议，网页「路由建议」卡片）、换挡审计后果前置（audit_ok+failing_checks，网页日志标注）；映射表与未落地项见 [docs/web-deployment.md §7](docs/web-deployment.md)。**测试 63/63 OK；audit exit 0；README 已补安装与运行**；已推送 GitHub。**Round 13** 及更早：使命 A（软件开发团队）定稿冻结；M0–M7、P3、D1–D8 全部核验 ✅；M8 已启动（5 成员 + 配额 + 涌现日志）；网页部署 S0→S5 全落地（`web/teamd.py` 纯标准库 HTTP+SSE + `web/index.html` 单文件控制台 + 部署/安全文档）。
 
 ---
 

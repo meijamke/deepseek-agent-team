@@ -44,6 +44,7 @@
   <span id="mission" class="chip">—</span>
   <span id="auditbadge" class="chip">—</span>
   <span id="usagebadge" class="chip">—</span>
+  <span id="attentionbadge" class="chip">—</span>
 </header>
 <main>
   <section class="panel wide"><h2>操作（S1 受控命令 · 人工干预点）</h2>
@@ -99,6 +100,11 @@
         <span class="muted">端点在浏览器同机可达；键不会被记录到工作区</span>
       </div>
       <div class="card">
+        <div class="muted">路由建议（#5180 领域路由 · 无 Manager，仅建议）</div>
+        <input id="r_goal" placeholder="目标/需求一句话" style="width:72%">
+        <button onclick="cmd('route_suggest',{goal:gv('r_goal')})">建议</button>
+      </div>
+      <div class="card">
         <div class="muted">使命换挡（S4 · 沙盒预演 → 人工确认）</div>
         <input id="m_title" placeholder="新 title" style="width:36%">
         <input id="m_roles" placeholder="roles 逗号分隔: writer,editor,reviewer" style="width:44%">
@@ -110,6 +116,7 @@
   </section>
   <section class="panel"><h2>成员</h2><div id="agents"></div></section>
   <section class="panel"><h2>任务 / 配额</h2><div id="tasks"></div></section>
+  <section class="panel"><h2>需关注（Attention · #5180）</h2><div id="attention"></div></section>
   <section class="panel wide"><h2>消息总线（尾部）</h2><div id="messages"></div></section>
   <section class="panel"><h2>移交链（Handoff）</h2><div id="handoffs"></div></section>
   <section class="panel"><h2>审计（8 项）</h2><div class="audit" id="audit"></div></section>
@@ -132,7 +139,10 @@ async function cmd(action, params){
       body: JSON.stringify({action, params})});
     const j = await r.json();
     const brief = j.ok && j.result && j.result.ok === false ? JSON.stringify(j.result) : (j.ok ? JSON.stringify(j.result ?? j).slice(0,200) : j.error);
-    logCmd('> ' + action + (j.ok ? ' ✓ ' : ' ✗ ') + brief);
+    let extra = '';
+    if (j.result && typeof j.result.audit_ok === 'boolean')
+      extra = ' · 审计' + (j.result.audit_ok ? '通过' : '未通过[' + (j.result.failing_checks||[]).join(',') + ']');
+    logCmd('> ' + action + (j.ok ? ' ✓ ' : ' ✗ ') + brief + extra);
     if (action === 'probe' || action === 'audit') tick();
     return j;
   }catch(e){ logCmd('> ' + action + ' ✗ 网络: ' + e); }
@@ -200,6 +210,18 @@ function render(s){
   const u = s.usage || {};
   document.getElementById('usagebadge').textContent = '用量 ' + (u.total_est_tokens||0) + ' est-token / ' + (u.records||0) + ' 条';
   document.getElementById('usagebadge').className = 'chip';
+
+  const at = s.attention || [];
+  const nHigh = at.filter(x => x.level === 'high').length;
+  const badge = document.getElementById('attentionbadge');
+  badge.textContent = '关注 ' + at.length + (nHigh ? '（high ' + nHigh + '）' : '');
+  badge.className = 'chip ' + (nHigh ? 'fail' : (at.length ? 'warn' : 'ok'));
+  document.getElementById('attention').innerHTML = at.map(x => `
+    <div class="card"><div class="row">
+      <span class="tag ${x.level === 'high' ? '' : 'st'}">${esc(x.level)}</span>
+      <b>${esc(x.kind)}:${esc(x.subject)}</b></div>
+      <div class="muted">${esc(x.reason)}</div></div>`).join('')
+    || '<div class="muted">无待关注项</div>';
 
   document.getElementById('agents').innerHTML = (s.agents||[]).map(x => `
     <div class="card">

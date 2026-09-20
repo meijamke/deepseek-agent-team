@@ -72,6 +72,7 @@ class TestTeamdHttp(unittest.TestCase):
                 data = json.loads(body)
                 self.assertEqual(data["mission"]["mission"], "A")
                 self.assertEqual(len(data["agents"]), 3)
+                self.assertIn("attention", data)  # #5180 attention 聚合随快照下发
                 # 与 CLI 直调一致（generated_at 除外）
                 cli = teamctl.web_snapshot(td)
                 data.pop("generated_at"); cli.pop("generated_at")
@@ -111,11 +112,18 @@ class TestTeamdHttp(unittest.TestCase):
                     "sender": "qa", "type": "review_result", "topic": "review", "task": "t9",
                     "payload": {"verdict": "pass", "method": "verify", "evidence": "e1"}}})
                 self.assertTrue(r["ok"], r)
+                # 证据已就位但产物缺失 → 预检 gate 仍 False（人工审批不被误导）
+                st, r = _post(base, "/api/command", {"action": "promote_check", "params": {
+                    "agent": "dev", "path": "shared/dev/out.md", "target": "out.md",
+                    "by": "qa", "task": "t9"}})
+                self.assertTrue(r["ok"] and not r["result"]["gate_ok"], r)
+                self.assertFalse(r["result"]["artifact_exists"], r)
                 teamctl.fs_write(td, "dev", "shared/dev/out.md", "ok")
                 st, r = _post(base, "/api/command", {"action": "promote_check", "params": {
                     "agent": "dev", "path": "shared/dev/out.md", "target": "out.md",
                     "by": "qa", "task": "t9"}})
                 self.assertTrue(r["result"]["gate_ok"], r)
+                self.assertTrue(r["result"]["artifact_exists"], r)
                 st, r = _post(base, "/api/command", {"action": "promote", "params": {
                     "agent": "dev", "path": "shared/dev/out.md", "target": "out.md",
                     "by": "qa", "task": "t9"}})
@@ -126,6 +134,11 @@ class TestTeamdHttp(unittest.TestCase):
                 # 未知动作
                 st, r = _post(base, "/api/command", {"action": "rm_rf"})
                 self.assertFalse(r["ok"])
+                # #5180：路由建议（只读，无 Manager 仅建议）
+                st, r = _post(base, "/api/command",
+                              {"action": "route_suggest", "params": {"goal": "实现订单并写测试"}})
+                self.assertTrue(r["ok"], r)
+                self.assertIn("dev", r["result"]["matched"])
             finally:
                 httpd.shutdown()
 

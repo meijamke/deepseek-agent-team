@@ -2,6 +2,67 @@
 
 按轮记录；证据优先（可复现产物/测试输出），与 PLAN.md 相互对照。
 
+## Round 14（2026-09-18）—— S5 实跑验收 ✅ + #5180 实践点落地 + 推送 GitHub
+
+**做了什么**（对应本轮指令「开发完跑一遍看是否符合 S5 目标…读完 #5180，有可行实践点就实现并验证，最后提交 GitHub 更新 README」）
+
+### 第一部分：S5 目标实跑验收（真实工作区，`teamd` 8090）
+
+1. **S1 任务创建**：网页 T 任务单 → `task_new` t-r14-accept（system/state/tasks.json）。
+2. **S2 成员执行**：网页启动 demo 作业 `job-000001` → 5 成员全部 done，产出
+   `eval/run/2026-09-18-web-demo-02/`（recap：5/5 done、promote=True(ops)、quota 2835/10000、
+   27 条记录、e1–e4 证据）。
+3. **S3 真实 LLM**：成员经 OpenAI-compatible mock 接入（8092 实例，backend=`real:openai-compat`），
+   `/api/jobs` 返回参数**不含 api_key**（密钥只在进程内部），usage 30 tokens/2 records
+   （stats 聚合计入配额）。
+4. **S4 使命换挡**：`mission_switch_dry` 沙盒 + `mission_apply` 实跑（临时根）→ revision 2、
+   history 追加、roles.md 追加「使命B·验收」、审计差分结果随命令返回（见下方返工 2）。
+5. **S5 安全/多实例**：令牌门禁（8091 带 token 401→200 / 8092 无 token→401）、
+   60/60 并发 `/api/command` 全部 200、并发后审计仍通过（tasks 15/messages 10/conflicts 0）。
+6. **审计/探测全通过**：`audit.py` 8/8、`probe_safety.py` 3/3（经 API 与本地两种方式）。
+7. **promote 人工门禁闭环**：qa 产 review_result → promote_check gate_ok=True → promote
+   发布 `shared/deliverables/r14-accept.md`（staging 保留在 shared/dev/）→ 审计仍 8/8。
+
+**实跑发现的缺陷（返工修复）**：
+
+- `promote_check` 预检不看产物是否存在 → 加 `artifact_exists` 门禁 + 测试。
+- `mission_switch_dry` 沙盒排除 eval/ → `evidence_gated` 假阳性 → 沙盒保留 eval/，实测仅剩
+  `card_role_known`（换挡本身的预期后果）。
+
+### 第二部分：#5180 实践点（阅读 + 提炼 + 实现 + 验证）
+
+阅读 [discussion #5180](https://github.com/deepseek-ai/deepseek-harness/discussions/5180)
+「App Plugin for DSH：同时面向人和 Agent 的插件形态」（作者 + YiHe 回复：问题路由到领域包）。
+可行实践点 → 实现：
+
+1. **`teamctl.attention_items()`**：把「人该看什么」收敛为决策清单——needs_input/failed 状态、
+   陈旧 running（>max_stale_hours）、并发冲突、审计未通过、配额耗尽；随 `web_snapshot.attention`
+   下发；网页新增「需关注」面板 + 头部徽标（high 标红）。
+2. **`teamctl.route_suggest(goal)`**：关键词→角色命中→参考协作链（**无 Manager，仅建议**，
+   返回 note 说明）；`web_cmd` 白名单 + 网页「路由建议」卡片（YiHe：路由到领域包）。
+3. **审计后果前置**：`mission_switch_dry/apply` 返回 audit_ok + failing_checks；网页命令日志
+   追加「审计通过/未通过[…]」。
+4. 未落地项（已写入 web-deployment.md §7 供后续）：任务级生命周期状态机、per-effect 相关性 ID、
+   per-App workspace、App identity/窗口生命周期（本项目形态不适用）。
+
+### 第三部分：验证证据
+
+- 回归测试：`test_protocol 29 + test_member 8 + test_audit 9 + test_drill 1 + test_parallel 2
+  + test_web 6 + test_teamd 5 + test_llm 3 = **63/63 OK**`；py_compile 全绿；`audit.py` exit 0（真实工作区）。
+- 新功能实跑（8090 实机）：attention（clean=0；set needs_input → high 1）；route_suggest
+  「写需求文档」→ matched=[spec] 链 spec→…→ops；promote_check 缺产物 → gate_ok=False/
+  artifact_exists=False；mission_switch_dry → audit_ok=False failing=['card_role_known']。
+- 测试覆盖：test_web 新增 attention+route（6 项）、test_teamd 新增 promote_check 双态 + route（5 项）。
+- 实跑产物：`eval/run/2026-09-18-web-demo-02/`（5/5 done）、`shared/deliverables/r14-accept.md`、
+  `system/state/tasks.json`（t-r14-accept）、`system/messages/review.jsonl`。
+
+### 第四部分：GitHub
+
+- 更新 [README.md](README.md)（**安装与运行**：克隆/自检/初始化使命/启动 teamd/命令行，纯标准库）。
+- 提交本轮全部改动（含实跑证据）→ 推送 `main`（Round 13 验证过同样的推送链路）。
+
+---
+
 ## Round 13（2026-09-18）—— 网页部署 S0→S5 全落地 + 推送 GitHub
 
 **做了什么**（对应本轮指令「从 s0 到 s5，依次实现」）

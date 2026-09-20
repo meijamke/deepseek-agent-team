@@ -680,6 +680,93 @@ def _audit_report(root):
     return mod.audit(root)
 
 
+def _audit_failing(rep):
+    """从审计报告抽取未通过检查名（只读，供人工决策展示）。"""
+    return [c["name"] for c in rep.get("checks", []) if c.get("status") != "pass"]
+
+
+# ---------------------------------------------------------------- 需人工关注（DSH #5180：长任务状态持续呈现 + attention）
+
+def attention_items(root, max_stale_hours=2.0):
+    """只读聚合：把「需要人工关注」的持续对象整理成列表（零副作用）。
+
+    对齐 DSH discussion #5180 的实践点：长任务需要人介入时，系统把任务/证据状态
+    作为持续对象呈现（而非只靠流式输出），并显式给出 attention（需要关注）状态。
+    本函数把成员异常/并发冲突/审计失败/配额耗尽收敛为一条决策清单，供网页面板与
+    CLI 使用。返回 [{level, kind, subject, reason}]，level=high 优先。"""
+    p = ensure(root)
+    items = []
+    for card in agent_list(root):
+        aid = card.get("agent_id")
+        st = status_get(root, aid)
+        s = st["status"].get("status")
+        if s in ("needs_input", "failed"):
+            items.append({"level": "high", "kind": "agent", "subject": aid,
+                          "reason": "status=%s：成员需要人工介入" % s})
+        elif s == "running":
+            upd = st["status"].get("updated_at") or ""
+            try:
+                ts = datetime.datetime.fromisoformat(str(upd).replace("Z", "+00:00"))
+                age_h = (datetime.datetime.now(datetime.timezone.utc) - ts).total_seconds() / 3600.0
+                if age_h > max_stale_hours:
+                    items.append({"level": "high", "kind": "agent", "subject": aid,
+                                  "reason": "running 但 %.1fh 无心跳（疑似卡死）" % age_h})
+            except ValueError:
+                pass
+    conflicts_dir = p["state"] / "conflicts"
+    if conflicts_dir.exists():
+        for f in sorted(conflicts_dir.iterdir()):
+            if f.is_file():
+                items.append({"level": "high", "kind": "conflict", "subject": f.name,
+                              "reason": "并发写入冲突：过期版本的写被乐观锁拒绝"})
+    rep = _audit_report(root)
+    if not (rep.get("passed") and rep.get("fail", 0) == 0):
+        fails = _audit_failing(rep)
+        items.append({"level": "high", "kind": "audit", "subject": "audit",
+                      "reason": "审计未通过: %s" % (",".join(fails) if fails else "?")})
+    for t in task_list(root):
+        q = quota_status(root, t["task_id"]) or {}
+        if q.get("pool") and q.get("spent", 0) >= q.get("pool", 0):
+            items.append({"level": "mid", "kind": "quota", "subject": t["task_id"],
+                          "reason": "配额已耗尽 %.0f/%.0f（预算感知）"
+                                    % (q["spent"], q["pool"])})
+    order = {"high": 0, "mid": 1}
+    items.sort(key=lambda x: (order.get(x["level"], 9), x["kind"], x["subject"]))
+    return items
+
+
+# ---------------------------------------------------------------- 领域路由建议（DSH #5180 回复：问题自动路由到领域包）
+
+_ROLE_HINTS = {
+    "spec": ["需求", "用户故事", "访谈", "规格", "requirement", "spec", "范围", "验收标准"],
+    "architect": ["架构", "设计", "拓扑", "组件", "接口设计", "architecture", "design", "模块划分"],
+    "dev": ["实现", "编码", "开发", "功能", "bug", "订单", "接口", "implement", "code", "修复", "单元测试"],
+    "qa": ["测试", "验证", "用例", "质量", "回归", "test", "verify", "评审", "缺陷"],
+    "ops": ["发布", "部署", "上线", "运维", "监控", "deploy", "release", "门禁", "冲突"],
+}
+PIPELINE_ORDER = ["spec", "architect", "dev", "qa", "ops"]
+
+
+def route_suggest(root, goal):
+    """只读建议（无 Manager 原则：只给建议，成员自主决定是否采纳）：
+    按关键词把目标路由到最匹配的角色，并给出参考协作链（roles.md 流水线序）。
+    对齐 #5180 回复「问题自动路由到领域包」，但保持去中心化：建议不强制。"""
+    goal = (goal or "").strip()
+    scored = {}
+    for role, kws in _ROLE_HINTS.items():
+        hits = [k for k in kws if k.lower() in goal.lower()]
+        if hits:
+            scored[role] = hits
+    if not scored:
+        chain = list(PIPELINE_ORDER)
+        return {"goal": goal, "matched": {}, "suggested_chain": chain,
+                "note": "无关键词命中：建议走默认流水线（仅建议，成员自主）"}
+    chain = [r for r in PIPELINE_ORDER if r in scored] + \
+            [r for r in PIPELINE_ORDER if r not in scored]
+    return {"goal": goal, "matched": scored, "suggested_chain": chain,
+            "note": "建议角色命中关键词；无 Manager，仅为参考，成员自主决定"}
+
+
 def web_snapshot(root, message_tail=10, log_tail=5):
     """只读聚合快照：成员/任务/消息/移交/配额/用量/冲突/审计/使命/评测/交付物。
 
@@ -760,6 +847,7 @@ def web_snapshot(root, message_tail=10, log_tail=5):
         "audit": _audit_report(root),
         "eval_runs": eval_runs,
         "deliverables": deliverables,
+        "attention": attention_items(root),
     }
 
 
@@ -867,10 +955,15 @@ def mission_switch_dry(root, params):
         sandbox = pathlib.Path(tmpdir) / "ws"
         shutil.copytree(pathlib.Path(root).resolve(), sandbox,
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".git",
-                                                      "eval", "node_modules"))
+                                                      "node_modules"))
+        # 注意：不能排除 eval/ —— 审计 evidence_gated 会引用 eval/tasks/*.json，
+        # 排除会导致沙盒审计出现「与换挡无关」的假阳性，误导人工判断。只增不改的
+        # 证据目录拷贝后审计即可与真实工作区对齐（差分=使命换挡本身）。
         reg = mission_init(str(sandbox), mission, title, roles, revision=rev)
         rep = _audit_report(str(sandbox))
-    return {"suggested_revision": rev, "mission": reg, "audit": rep}
+    return {"suggested_revision": rev, "mission": reg, "audit": rep,
+            "audit_ok": bool(rep.get("passed") and rep.get("fail", 0) == 0),
+            "failing_checks": _audit_failing(rep)}
 
 
 def mission_apply(root, params):
@@ -897,7 +990,10 @@ def mission_apply(root, params):
         f.write("- mission: `%s`；title: %s；roles: %s\n" % (mission, title, ",".join(roles)))
         f.write("- 依据使命变更规程（快照 → 草案 → 三层验证 → 安全/审计 → 沙箱 → 人工确认）；"
                 "成员卡片须按新角色表整体迁移后重新审计。\n")
-    return {"registry": reg, "history": _mission_history(root), "audit": _audit_report(root)}
+    rep = _audit_report(root)
+    return {"registry": reg, "history": _mission_history(root), "audit": rep,
+            "audit_ok": bool(rep.get("passed") and rep.get("fail", 0) == 0),
+            "failing_checks": _audit_failing(rep)}
 
 
 def web_cmd(root, action, params=None):
@@ -930,9 +1026,15 @@ def web_cmd(root, action, params=None):
         if action == "promote_check":
             ev = _evidence_pass_for_task(root, params.get("task", ""))
             card = _read_json(ensure(root)["agents"] / (params.get("by") or "?") / "agent-card.json", {})
+            # 预检应包含产物存在性，避免人工在「看起来能过」的审批后才发现失败
+            p = pathlib.Path(root).resolve()
+            src = (p / (params.get("path") or "")).resolve()
+            agent = params.get("agent") or "?"
+            exists = src.is_file() and str(src).startswith(str(p / "shared" / agent))
             return {"ok": True, "result": {
                 "evidence": ev, "promoter_role": card.get("role"),
-                "gate_ok": bool(ev) and card.get("role") in ("qa", "ops")}}
+                "artifact_exists": exists,
+                "gate_ok": bool(ev) and card.get("role") in ("qa", "ops") and exists}}
         if action == "promote":
             if not all(params.get(k) for k in ("agent", "path", "target", "by", "task")):
                 raise ValueError("promote needs agent/path/target/by/task")
@@ -950,9 +1052,11 @@ def web_cmd(root, action, params=None):
             return {"ok": True, "result": mission_switch_dry(root, params)}
         if action == "mission_apply":
             return {"ok": True, "result": mission_apply(root, params)}
+        if action == "route_suggest":
+            return {"ok": True, "result": route_suggest(root, params.get("goal", ""))}
         return {"ok": False, "error": "unknown action %r (whitelist: %s)"
                 % (action, "snapshot/task_new/send/status_set/promote_check/promote/audit/probe/"
-                           "run_demo/run_llm/mission_switch_dry/mission_apply")}
+                           "run_demo/run_llm/mission_switch_dry/mission_apply/route_suggest")}
     except (SchemaError, ValueError, KeyError, json.JSONDecodeError, FileNotFoundError) as e:
         return {"ok": False, "error": "%s: %s" % (type(e).__name__, e)}
 

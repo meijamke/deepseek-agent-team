@@ -38,7 +38,7 @@ class TestWebSnapshot(unittest.TestCase):
             s = teamctl.web_snapshot(td)
             for k in ("generated_at", "root", "mission", "agents", "tasks", "messages",
                       "handoffs", "conflicts", "usage", "quotas", "logs", "audit",
-                      "eval_runs", "deliverables"):
+                      "eval_runs", "deliverables", "attention"):
                 self.assertIn(k, s)
             self.assertEqual(s["mission"]["mission"], "A")
             by_id = {a["agent_id"]: a for a in s["agents"]}
@@ -68,6 +68,35 @@ class TestWebSnapshot(unittest.TestCase):
             s1.pop("generated_at"); s2.pop("generated_at")
             self.assertEqual(s1, s2)  # 幂等（生成时间除外）
 
+    def test_attention_and_route(self):
+        """#5180 实践点：attention 持续对象（需人工关注）+ 领域路由建议（无 Manager 仅建议）。"""
+        with tempfile.TemporaryDirectory() as td:
+            teamctl.mission_init(td, "A", "T", ["spec", "dev", "qa"])
+            teamctl.agent_new(td, "spec", role="spec")
+            teamctl.agent_new(td, "dev", role="dev")
+            teamctl.agent_new(td, "qa", role="qa")
+            # 干净工作区：无待关注
+            s = teamctl.web_snapshot(td)
+            self.assertEqual(s["attention"], [])
+            # 成员 needs_input → attention 出现（高优先级、零副作用）
+            teamctl.status_set(td, "dev", "needs_input", progress="需要人工确认")
+            s2 = teamctl.web_snapshot(td)
+            items = s2["attention"]
+            self.assertEqual(len([i for i in items if i["kind"] == "agent" and i["subject"] == "dev"]), 1)
+            self.assertEqual(items[0]["level"], "high")
+            self.assertIn("需要人工介入", items[0]["reason"])
+            # 路由建议：关键词命中 + 确定性
+            r = teamctl.route_suggest(td, "实现订单模块并补充单元测试")
+            self.assertIn("dev", r["matched"])
+            self.assertTrue(r["suggested_chain"])
+            self.assertIn("无 Manager", r["note"])
+            r2 = teamctl.route_suggest(td, "部署到生产环境并监控")
+            self.assertIn("ops", r2["matched"])
+            # 无命中 → 默认流水线（仍不建议强制）
+            r3 = teamctl.route_suggest(td, "随机目标xyz")
+            self.assertEqual(r3["suggested_chain"], ["spec", "architect", "dev", "qa", "ops"])
+            self.assertEqual(r3["matched"], {})
+
     def test_audit_failure_reflected(self):
         with tempfile.TemporaryDirectory() as td:
             teamctl.mission_init(td, "A", "T", ["spec", "dev"])
@@ -93,6 +122,8 @@ class TestMissionSwitchWeb(unittest.TestCase):
                                   "mission": "B"})["result"]
             self.assertEqual(dr["suggested_revision"], 2)
             self.assertTrue(dr["audit"]["passed"], dr["audit"]["summary"])
+            self.assertTrue(dr["audit_ok"])
+            self.assertEqual(dr["failing_checks"], [])
             self.assertEqual(dr["mission"]["mission"], "B")
             # 真实工作区不受影响
             self.assertEqual(teamctl.mission_get(td)["revision"], 1)
@@ -100,6 +131,8 @@ class TestMissionSwitchWeb(unittest.TestCase):
             dr2 = teamctl.web_cmd(td, "mission_switch_dry",
                                   {"title": "研究写作", "roles": ["writer", "editor"]})["result"]
             self.assertFalse(dr2["audit"]["passed"])
+            self.assertFalse(dr2["audit_ok"])
+            self.assertIn("card_role_known", dr2["failing_checks"])
             names = {c["name"]: c["status"] for c in dr2["audit"]["checks"]}
             self.assertEqual(names["card_role_known"], "fail")
 
@@ -114,6 +147,8 @@ class TestMissionSwitchWeb(unittest.TestCase):
             self.assertEqual(res["registry"]["revision"], 2)
             self.assertEqual(len(res["history"]), 1)
             self.assertTrue(res["audit"]["passed"])
+            self.assertTrue(res["audit_ok"])
+            self.assertEqual(res["failing_checks"], [])
             roles_md = pathlib.Path(td, "docs", "roles.md").read_text(encoding="utf-8")
             self.assertIn("使命变更", roles_md)
             snap = teamctl.web_snapshot(td)
