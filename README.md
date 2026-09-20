@@ -1,57 +1,74 @@
-# Multi-Agent Decentralized Team (in DSH)
+# DeepSeek Agent Team
 
-依据《深入理解 AI Agent》(bojieli, [ai-agent-book](https://bojieli.github.io/ai-agent-book/)) 的纲领，
-在本工作区构建**多 Agent 去中心化团队**：无中心 Manager，对等成员通过共享工作区与消息协议
-自主协作，具备评估、容错与持续进化能力。
+[English](README.en.md) | 中文
 
-- **计划**：[PLAN.md](PLAN.md)（目标拆解 / WBS / 路线图 / 验收闸门）
-- **角色**：[docs/roles.md](docs/roles.md)
-- **文件系统约定**：[docs/filesystem.md](docs/filesystem.md)
-- **协议规范**：[docs/protocols/README.md](docs/protocols/README.md)
-- **进度**：[docs/PROGRESS.md](docs/PROGRESS.md)
-- **网页运行时**：[web/README.md](web/README.md)（teamd：S0–S5 部署/安全/多实例文档）
+DeepSeek Agent Team（`agent-team`）是**多 Agent 去中心化团队**的开源实现，
+由 [meijamke](https://github.com/meijamke) 依据 [《深入理解 AI Agent》](https://bojieli.github.io/ai-agent-book/)
+（bojieli）的纲领构建：**无中心 Manager**，对等成员（spec / architect / dev / qa / ops）通过共享工作区
+与消息协议自主协作，具备评估、容错与持续进化能力。
 
-## 安装与运行
+它由三层组成：**协议层**（[`tools/teamctl.py`](tools/teamctl.py)，纯 Python 标准库：信封 / 移交包 /
+乐观锁 / 审计 / 用量）、**成员内核**（[`team/member.py`](team/member.py)：ReAct + LLM 后端）、
+**运行时**（[`web/teamd.py`](web/teamd.py)：单文件无构建网页控制台 + HTTP/SSE 管理面，S0–S5）。
+全部依赖仅为 Python ≥ 3.10 标准库。
 
-**环境要求**：Python ≥ 3.10（推荐 3.10），**无需任何第三方依赖**（全部仅用 Python 标准库）。
+文档：[docs/protocols/README.md](docs/protocols/README.md)（协议） ·
+[docs/roles.md](docs/roles.md)（角色） · [docs/filesystem.md](docs/filesystem.md)（文件系统） ·
+[web/README.md](web/README.md)（部署 / 安全） · [PLAN.md](PLAN.md)（计划） ·
+[docs/PROGRESS.md](docs/PROGRESS.md)（进度）
+
+## 开发者预览
+
+项目处于**持续迭代**阶段（按「轮」推进，最近一轮见 [docs/PROGRESS.md](docs/PROGRESS.md)）。
+**未来可能出现不兼容变更。** 运行前请阅读 [web/README.md](web/README.md)（部署 / 安全）
+与 [docs/protocols/README.md](docs/protocols/README.md)（协议规范）。
+
+## 运行
+
+### 快速开始（从源码运行）
 
 ```bash
-# 1) 克隆
 git clone https://github.com/meijamke/deepseek-agent-team.git
 cd deepseek-agent-team
 
-# 2) 自检（可选但推荐）
-python3.10 tools/tests/test_protocol.py     # 协议层
-python3.10 tools/tests/test_member.py       # 成员执行
-python3.10 tools/tests/test_audit.py        # 审计
-python3.10 tools/tests/test_web.py          # 关注点/路由等 web 能力
-python3.10 tools/tests/test_teamd.py        # HTTP 管理端
-# 全量回归：tools/tests/run_all.sh（或逐个运行）
-
-# 3) 初始化一个使命（创建 5 角色成员）
+# 初始化一个使命（创建 5 角色成员）
 python3.10 tools/teamctl.py --root . mission init --mission A \
     --title "使命A·初始" --roles spec architect dev qa ops
-python3.10 tools/teamctl.py --root . agent new --id spec --role spec        # 其它 4 角色同理
-# 没有 --root 时默认用当前目录；mission init 会创建 members/ 与 system/ 骨架
+python3.10 tools/teamctl.py --root . agent new --id spec --role spec   # 其余 4 角色同理
 
-# 4) 启动网页控制台（teamd，S0–S5 全部能力）
-python3.10 web/teamd.py --root . --port 8090          # 打开 http://127.0.0.1:8090/
-# 常用参数：--host 0.0.0.0   --token <secret>（作业/写操作需 X-Token）
-#           --max-stale-hours 2（attention 判定阈值）   --real-llm（成员接入真实 LLM）
+# 启动网页控制台（S0–S5 全部能力）
+python3.10 web/teamd.py --root . --port 8090    # 打开 http://127.0.0.1:8090/
+```
 
-# 5) 命令行同样可用（协议层与网页共用同一实现）
+`teamd` 常用参数：`--host 0.0.0.0`（对外监听）、`--token <secret>`（写操作 / 作业需
+`X-Token`）、`--max-stale-hours 2`（「需关注」判定阈值）、`--real-llm`（成员接入真实 LLM）。
+管理员面：`GET /api/snapshot`、`GET /api/jobs`、SSE `/api/events`；`POST /api/command`
+（受控白名单）、`POST /api/run`（成员执行）。
+
+### 命令行（协议层）
+
+```bash
 python3.10 tools/teamctl.py --root . send --sender spec --type task_assigned \
     --recipient dev --payload '{"task":"ping"}'
 python3.10 tools/teamctl.py --root . read --from dev --tail 5
 python3.10 tools/teamctl.py --root . usage report          # 令牌用量
-python3.10 tools/audit.py --root .                          # 审计（exit 0=通过）
+python3.10 tools/audit.py --root .                          # 审计（exit 0 = 通过）
 python3.10 tools/probe_safety.py --root .                   # 安全探测
 ```
 
-**运行形态**：`teamd` 是独立进程（ThreadingHTTPServer，纯标准库），
-GET `/` `/api/snapshot` `/api/jobs` + SSE `/api/events`；POST `/api/command`（受控白名单）与
-`/api/run`（成员执行）。数据全部落盘于 `--root`（不变式：网页可随时重启并从磁盘恢复，
-恢复后审计、关注点、任务/配额均一致）。更完整的部署/安全/多实例说明见 [web/README.md](web/README.md)。
+### 自检与回归
+
+```bash
+python3.10 tools/tests/test_protocol.py     # 协议层（29 项）
+python3.10 tools/tests/test_member.py       # 成员执行（8 项）
+python3.10 tools/tests/test_audit.py        # 审计（9 项）
+python3.10 tools/tests/test_drill.py        # 故障演练（1 项）
+python3.10 tools/tests/test_parallel.py     # 并发（2 项）
+python3.10 tools/tests/test_web.py          # 关注点/路由等 web 能力（6 项）
+python3.10 tools/tests/test_teamd.py        # HTTP 管理端（5 项）
+python3.10 tools/tests/test_llm.py          # LLM 后端（3 项）
+# 全量 63/63 通过
+```
 
 ## 目录结构（四区域虚拟文件系统）
 
@@ -72,19 +89,22 @@ deepseek_agentteam/
 └── tools/teamctl.py      # 协议层参考实现（stdlib，仅 Python 标准库）
 ```
 
-## 快速上手
+## 社区与支持
 
-```bash
-# 协议层（CLI）
-python3.10 tools/tests/test_protocol.py      # 协议层单元测试
-python3.10 tools/teamctl.py --root . agent new --id spec --role spec
-python3.10 tools/teamctl.py --root . send --sender spec --type task_assigned --recipient dev --payload '{"task":"ping"}'
-python3.10 tools/teamctl.py --root . read --from dev --tail 5
+- 通过 [GitHub Issues](https://github.com/meijamke/deepseek-agent-team/issues) 提交反馈或 bug 报告。
 
-# 网页运行时（直接部署，S0–S5 已实现）
-python3.10 web/teamd.py --root . --port 8090   # 打开 http://127.0.0.1:8090/
-```
+## 参与贡献
 
-> 说明：协议层（数据/控制平面）已实现并测试通过；`web/teamd.py` 提供网页部署运行
-> （只读控制台/受控命令/成员执行/真实 LLM/使命换挡，详见 [web/README.md](web/README.md)）。
-> 完整的安装与运行方式见上方「安装与运行」。
+参见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 开发
+
+- 计划与路线图：[PLAN.md](PLAN.md)；按轮进度：[docs/PROGRESS.md](docs/PROGRESS.md)
+- 协议规范：[docs/protocols/README.md](docs/protocols/README.md)
+- 角色与成员手册：[docs/roles.md](docs/roles.md) · [docs/member-manual.md](docs/member-manual.md)
+- 文件系统约定：[docs/filesystem.md](docs/filesystem.md)
+- 运行时部署 / 安全 / 多实例：[web/README.md](web/README.md) · [docs/web-deployment.md](docs/web-deployment.md)
+
+## 许可证
+
+[MIT](LICENSE)
